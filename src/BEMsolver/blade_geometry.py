@@ -6,7 +6,7 @@ from .aerofoil_lookup import AerofoilLookup
 
 
 class BladeGeometry:
-    def __init__(self):
+    def __init__(self, silent_mode = False):
         # known quantities 
         self.number_of_nodes = 0 # number of blade sections
         self.radial_distances = [] # {r}
@@ -38,13 +38,16 @@ class BladeGeometry:
         self.solidity = []    
         self.chord_solidity = []
         
+        self.silent_mode = silent_mode
+        
     def calculate_solidity(self):
         if (self.B==0):
             raise Exception("B is 0. Please set the number of blades.")
         
         temp = self.B/(2* pi * self.R)
         self.solidity = self.chord_lengths*temp/ self.radial_distances
-        print("Solidity calculated (B = " + str(self.B) + ").")
+        if not self.silent_mode:
+            print("Solidity calculated (B = " + str(self.B) + ").")
         
     def calculate_chord_solidity(self):
         temp = self.B/(2* pi)
@@ -55,7 +58,8 @@ class BladeGeometry:
         try:
             config = read_csv(file_path, delim_whitespace=True,
                         comment="!", names=['r', 'beta', 'dr', 'chord', 'type'])
-            print("Configuration read succesfully.")
+            if not self.silent_mode:
+                print("Configuration read succesfully.")
         except errors.EmptyDataError:
             print("Empty file:", self.aerofoil_name)
         except FileNotFoundError:
@@ -83,24 +87,21 @@ class BladeGeometry:
                 
         # now add the lookups for the aerofoil data
         for aerofoil_type in unique(config.type):
-            print("Adding: " + aerofoil_type)
+            if not self.silent_mode:
+                print("Adding: " + aerofoil_type)
             self.aerofoil_dict[aerofoil_type] = AerofoilLookup(aerofoil_type)
     
         self.R = max(self.radial_distances)
         self.blade_length = round(sum(self.radial_differences),3)
             
-        print("Configuration added: ", config_name)
-        print("Number of sections:  ", length)
-        print("Blade Length:  ", self.blade_length)
-        print("Blade tip radius:  ", self.R)
+        if not self.silent_mode:
+            print("Configuration added: ", config_name)
+            print("Number of sections:  ", length)
+            print("Blade Length:  ", self.blade_length)
+            print("Blade tip radius:  ", self.R)
     
     def update_angle_of_attack(self):
         self.angle_of_attack = rad2deg(self.phi - self.twist_angles)
-        
-        
-        # print("ANGLE OF ATTACK:")
-        # print(self.angle_of_attack)
-        # print(self.phi)
         
     def update_drag_and_lift(self):
         for ind in range(self.number_of_nodes):
