@@ -39,6 +39,11 @@ class BladeGeometry:
         self.chord_solidity = []
         
         self.silent_mode = silent_mode
+    
+    def print_details(self):
+        print(f"{'Node':<10} {'r [m]':<10} {'dr [m]':<10} {'c(r) [m]':<10} {'beta(r) [rad]':<15} {'type name':<15}")
+        for node in range(self.number_of_nodes):
+            print(f"{node:<10.0f} {self.radial_distances[node]:<10.4f} {self.radial_differences[node]:<10.4f} {self.chord_lengths[node]:<10.4f} {self.twist_angles[node]:<15.4f} {self.aerofoil_type[node]:<15}")
         
     def calculate_solidity(self):
         if (self.B==0):
@@ -51,7 +56,8 @@ class BladeGeometry:
         
     def calculate_chord_solidity(self):
         temp = self.B/(2* pi)
-        self.chord_solidity = self.chord_lengths*temp/self.radial_distances
+        self.chord_solidity = temp*self.chord_lengths/self.radial_distances
+        # print(self.chord_solidity)
         
     def read_configuration(self, file_path: str):
         config_name = (file_path.split('/')[-1]).split(".case")[0]
@@ -91,7 +97,7 @@ class BladeGeometry:
                 print("Adding: " + aerofoil_type)
             self.aerofoil_dict[aerofoil_type] = AerofoilLookup(aerofoil_type)
     
-        self.R = max(self.radial_distances)
+        self.R = list(self.radial_distances)[-1] + 0.5*list(self.radial_differences)[-1]
         self.blade_length = round(sum(self.radial_differences),3)
             
         if not self.silent_mode:
@@ -99,6 +105,8 @@ class BladeGeometry:
             print("Number of sections:  ", length)
             print("Blade Length:  ", self.blade_length)
             print("Blade tip radius:  ", self.R)
+            print()
+            self.print_details()
     
     def update_angle_of_attack(self):
         self.angle_of_attack = rad2deg(self.phi - self.twist_angles)

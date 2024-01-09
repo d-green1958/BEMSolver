@@ -1,6 +1,6 @@
 from .blade_geometry import BladeGeometry
 from math import atan,sin,cos,sqrt, pi
-from numpy import isnan
+from numpy import isnan, deg2rad, rad2deg
     
 class Problem:
     def __init__(self, silent_mode=False):
@@ -21,8 +21,6 @@ class Problem:
         self.torque_coeff = []
         self.thrust_coeff = []
         self.power_coeff = []
-        
-
         
         
     # set the parameters used for solving (rotational speed, wind speed, density of air)
@@ -57,6 +55,7 @@ class Problem:
             print()
         
     def apply_ICs(self, axial_IC, tangential_IC: list[float]):
+        
         if not self.silent_mode:
             print(f"{'#'*10}  INITIAL CONDITIONS  {'#'*10}")
         
@@ -81,7 +80,7 @@ class Problem:
     
     # update the phi angle using the current axial and tangential inducantce factors
     def update_phi(self):
-        temp = self.blade.R/self.tip_speed_ratio
+        temp = self.wind_speed/self.rot_speed
         numer = 0
         denom = 0
 
@@ -92,11 +91,7 @@ class Problem:
             
             if isnan(self.blade.phi[node]):
                 print("ERR: DIVERGENCE")
-                # print("NODE", node)
-                # print("NUMERATOR", (1-self.blade.axial_inductance[node]))
-                # print("TEMP", temp)
-                # print("DENOMINATOR", (1+self.blade.tangential_inductance[node]))
-                # print("DR", self.blade.radial_distances[node])
+                raise("ERR: Iteration has diverged!")
 
     # update the axial and tangential inductance factors using the current phi value
     def update_factors(self):
@@ -123,11 +118,27 @@ class Problem:
             self.blade.tangential_inductance[node] = 1/(4*sinphi*cosphi/(sigma * Cy) - 1)
          
     # calcualtes the power from the tangential and axial inductances
-    def calculate_torque(self, U_inf, rot_speed):
+    def calculate_torque(self):
         temp = 0
         for i in range(self.blade.number_of_nodes):
-            temp += self.rho* 4 * pi * self.blade.radial_distances[i]**3 * self.blade.radial_differences[i] * self.blade.tangential_inductance[i] * (1 - self.blade.axial_inductance[i]) * rot_speed
+            temp +=  self.rho* 4 * pi * self.blade.radial_distances[i]**3 * self.blade.radial_differences[i] * self.blade.tangential_inductance[i] * (1 - self.blade.axial_inductance[i]) * self.rot_speed * self.wind_speed
         return temp
+    
+    def calculate_thrust(self):
+        temp = 0
+        for i in range(self.blade.number_of_nodes):
+            temp += self.rho* 4 * pi * self.blade.radial_distances[i] * self.blade.radial_differences[i] * self.blade.axial_inductance[i] * (1 - self.blade.axial_inductance[i]) * self.wind_speed**2
+        return temp
+    
+    def append_new_results(self):
+        thrust = self.calculate_thrust()
+        torque = self.calculate_torque()
+        power  = torque * self.rot_speed 
+        
+        self.thrust.append(thrust)
+        self.torque.append(torque)
+        self.power.append(power)
+        
     
     # returns L_2 error squared
     def find_err(self):
@@ -137,17 +148,16 @@ class Problem:
         return sum
             
     # produces a single run until either convergence to the defined tolerance or max interations is met.
-    def single_run(self, tol: float, iter_max: int):    
+    def single_run(self, tol: float, iter_max: int, show_iterations = False, show_results = True):    
         if not self.silent_mode:
             print(f"{'#'*10}  SINGLE SOLVE  {'#'*10}")
             
         converged = False
         iter = 0
-        print()
         while iter<iter_max:
             self.update_factors()
             self.err.append(sqrt(self.find_err()))
-            if not self.silent_mode:
+            if show_iterations:
                 print("iteration: ", iter, "err: ", self.err[-1])
             
             self.update_phi()
@@ -165,13 +175,20 @@ class Problem:
             print(f"converged:{converged} final iteration:{iter}")
             print()
             print()
-            
+        
+        if (show_results) and (not self.silent_mode):
+            print(f"{'#'*10}  FINAL VALUES  {'#'*10}")
+            for node in range(self.blade.number_of_nodes):
+                print(f"{node:<5} a={self.blade.axial_inductance[node]:<10.4f} a'={self.blade.tangential_inductance[node]:<10.4f} phi={rad2deg(self.blade.phi[node]):<10.4f} [deg]")
+            print()
+            print()
         
         # produced multiple runs over provided parameters (tip speeds).
-        def multiple_run(self, tol:float, iter_max: int, rot_speeds: list[float], wind_speeds: list[float], axial_IC, tangnetial_IC):
+        def multiple_run(self, tol:float, iter_max: int, rot_speeds: list[float], wind_speeds: list[float], axial_IC, tangnetial_IC, show_iterations = True):
             print("FINISH THIS")
             if not self.silent_mode():
                 print(f"{'#'*10}  MULTIPLE SOLVE  {'#'*10}")
+            
             
             # change parameters
             # apply the ICs
