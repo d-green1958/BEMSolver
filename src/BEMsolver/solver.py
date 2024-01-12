@@ -144,13 +144,27 @@ class Problem:
     def get_torque_and_thrust(self):
         return sum(self.torque_elements), sum(self.thrust_elements)
 
-    def apply_prandtl_tip_loss(self):
+    def apply_tip_loss(self):
         R = self.blade.R
         B = self.blade.B
         tsr = self.tip_speed_ratio
-        for i, (r, a,) in enumerate(zip(self.blade.radial_distances, self.blade.axial_inductance)):
-            self.torque_elements[i] = self.torque_elements[i] * \
-                prandtl_tip_loss_factor(r, R, B, a, tsr)
+        for i, (r, a, phi) in enumerate(zip(self.blade.radial_distances, self.blade.axial_inductance, self.blade.phi)):
+            # factor = prandtl_tip_loss_factor(r, R, B, phi)
+            factor = prandtl_tip_loss_factor_approx(r, R, B, a, tsr)
+            # factor = xu_sankar_tip_loss(r, R, B, phi)
+            
+            self.torque_elements[i] *= factor
+            self.thrust_elements[i] *= factor
+            
+    def apply_hub_loss(self):
+        R_hub = self.blade.R_hub
+        B = self.blade.B
+        for i, (r, a, phi) in enumerate(zip(self.blade.radial_distances, self.blade.axial_inductance, self.blade.phi)):
+            factor = prandtl_hub_loss_factor(r, R_hub, B, phi)
+            
+            self.torque_elements[i] *= factor
+            self.thrust_elements[i] *= factor
+        
 
     def append_new_results(self):
         # thrust = self.calculate_thrust()

@@ -31,6 +31,7 @@ class BladeGeometry:
         
         self.phi = [] # phi
         self.R = 0 # blade tip speed radius
+        self.R_hub = 0 # the blade hub radius
         self.blade_length = 0 # blade length
         
         # calculated quantities
@@ -98,6 +99,7 @@ class BladeGeometry:
             self.aerofoil_dict[aerofoil_type] = AerofoilLookup(aerofoil_type)
     
         self.R = list(self.radial_distances)[-1] + 0.5*list(self.radial_differences)[-1]
+        self.R_hub = list(self.radial_distances)[0] - 0.5*list(self.radial_differences)[0]
         self.blade_length = round(sum(self.radial_differences),3)
             
         if not self.silent_mode:
