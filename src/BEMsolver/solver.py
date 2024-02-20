@@ -1,7 +1,7 @@
 from .blade_geometry import BladeGeometry
 from .correction_factors import *
 from math import atan, sin, cos, sqrt, pi
-from numpy import isnan, deg2rad, rad2deg
+from numpy import isnan, deg2rad, rad2deg, linspace, meshgrid, ones
 
 
 class Problem:
@@ -235,3 +235,94 @@ class Problem:
             # run until convergence
             # calcualte power and C_p
             # save to
+            
+
+def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, tangential_initial = -1,
+                   tol = 1E-3, max_iterations = 100, silent_mode = False, use_tip_loss = False,
+                   use_hub_loss = False):
+        # return the a problem object in case the user wants to do further analysis or plotting
+        
+    problem = Problem(silent_mode)
+    problem.add_configuration(config_path=configuration_file)
+    
+    if axial_initial == -1:
+        axial_initial = [1/3]*problem.blade.number_of_nodes
+    if tangential_initial == -1:
+        tangential_initial = [0]*problem.blade.number_of_nodes
+    
+    problem.set_parameters(rot_speed=rot_speed,wind_speed=wind_speed)
+    problem.apply_ICs(axial_IC=axial_initial, tangential_IC=tangential_initial)
+    problem.compute_factors(tol=tol, iter_max=max_iterations)
+    problem.calculate_thrust()
+    problem.calculate_torque()
+    
+    if use_tip_loss:
+        problem.apply_tip_loss()
+    if use_hub_loss:
+        problem.apply_hub_loss()
+    
+    problem.append_new_results()
+    
+    torque = problem.torque[-1]
+    thrust = problem.thrust[-1]
+    power = problem.power[-1]
+    
+    print(f"Torque {torque/1E6} MNm")
+    print(f"Thrust {thrust/1E6} MN")
+    print(f"Power {power/1E6} MW")
+    
+    return problem, torque, thrust, power
+
+
+
+        
+def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_speed_nodes,
+                   rot_speed_start, rot_speed_end, rot_speed_nodes,
+                   axial_initial=-1, tangential_initial=-1,
+                   tol = 1E-3, max_iterations = 100, silent_mode = True):
+    
+    problem = Problem(silent_mode=silent_mode)
+    problem.add_configuration(config_path=configuration_file)
+    
+    if axial_initial == -1:
+        axial_initial = [1/3]*problem.blade.number_of_nodes
+    if tangential_initial == -1:
+        tangential_initial = [0]*problem.blade.number_of_nodes
+        
+    wind_speeds = linspace(wind_speed_start, wind_speed_end, wind_speed_nodes)
+    rot_speeds = linspace(rot_speed_start, rot_speed_end, rot_speed_nodes)
+    
+    wind_speeds, rot_speeds = meshgrid(wind_speeds, rot_speeds)
+    
+    powers = ones(wind_speeds.shape)
+    thrusts = powers
+    torques = powers
+    
+    ## A PROBLEM IS HERE SOMEWHERE ##
+    
+    for wind_speed_index in range(wind_speed_nodes-1):
+        for rot_speed_index in range(rot_speed_nodes-1):
+            wind_speed = wind_speeds[wind_speed_index][rot_speed_nodes]
+            rot_speed = rot_speeds[wind_speed_index][rot_speed_index]
+            
+            tsr = problem.blade.R * rot_speed / wind_speed
+            print(f"wind speed:{wind_speed}, rot_speed:{rot_speed}, tsr:{tsr}")
+            
+            problem.err = []
+            problem.set_parameters(wind_speed=wind_speed, rot_speed=rot_speed)
+            problem.apply_ICs(axial_IC=axial_initial, tangential_IC=tangential_initial)
+            problem.compute_factors()
+            problem.calculate_thrust()
+            problem.calculate_torque()
+            problem.append_new_results()
+            
+            torque = problem.torque[-1]
+            thrust = problem.thrust[-1]
+            power = problem.power[-1]
+            
+            torques[wind_speed_index][rot_speed_index] = torque
+            thrusts[wind_speed_index][rot_speed_index] = thrusts
+            power[wind_speed_index][rot_speed_index] = power
+    
+    return torques, thrusts, powers
+        
