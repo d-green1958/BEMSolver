@@ -2,7 +2,8 @@ from .blade_geometry import BladeGeometry
 from .correction_factors import *
 from math import atan, sin, cos, pi
 from numpy import isnan, deg2rad, rad2deg, linspace, meshgrid, ones, dstack, ndenumerate, ndindex, amax
-from scipy import optimize
+from scipy.optimize import root_scalar
+import warnings
 
 
 class Problem:
@@ -27,6 +28,7 @@ class Problem:
         self.torque_coeff = []
         self.thrust_coeff = []
         self.power_coeff = []
+        
 
     # set the parameters used for solving (rotational speed, wind speed, density of air)
 
@@ -195,6 +197,7 @@ class Problem:
         if not self.silent_mode:
             print(f"{'#'*10}  COMPUTE FACTORS (ITERATION)  {'#'*10}")
         
+        
         for node in range(self.blade.number_of_nodes):
             iter = 0
             converged = False
@@ -213,14 +216,14 @@ class Problem:
                 self.blade.update_angle_of_attack(node)
                 self.blade.update_drag_and_lift(node)
                 
-                err = abs(self.blade.axial_inductance[node] - self.blade.axial_inductance_prev[node])
+                err = abs(self.blade.axial_inductance[node] - self.blade.axial_inductance_prev[node])/abs(self.blade.axial_inductance[node])
                 if err < tol:
                     converged = True
                     break
                 iter += 1
                 
             if not self.silent_mode:
-                print(f"node:{node:<4} converged:{converged:<3} final iteration:{iter:<4} final err:{err:<10.8f}")
+                print(f"node:{node:<4} converged:{converged:<3} final iteration:{iter:<7} final err:{err:<10.8f}")
         if not self.silent_mode:
             print()
             print()    
@@ -241,24 +244,70 @@ class Problem:
         self.blade.update_angle_of_attack(node)
         self.blade.update_drag_and_lift(node)
         
+        radial_distance = self.blade.radial_distances[node]
+        Cl = self.blade.lift_coeff[node]
+        Cd = self.blade.drag_coeff[node]
+        chord_solidity = self.blade.chord_solidity[node]
+        
+        axial_inductance, tangential_inductance = self.calculate_factors(phi, Cl, Cd, chord_solidity)
+        
+        sinphi = sin(phi)
+        cosphi = cos(phi)
+        
+        temp = self.wind_speed/self.rot_speed
+        
+        term1 = sinphi/(1-axial_inductance)
+        term2 = cosphi*temp/(radial_distance*(1+tangential_inductance))
+        
+        return term1 - term2
+        
             
-    def compute_factors_by_root_finder(self):
+    def compute_factors_by_root_finder(self, tol: float, iter_max: int, show_results=True):
         if not self.silent_mode:
             print(f"{'#'*10}  COMPUTE FACTORS (ROOT FINDER)  {'#'*10}")
-        
-        for node in range(self.blade.number_of_nodes):
-            radial_distance = self.blade.radial_distances[node]
-            Cl = self.blade.lift_coeff[node]
-            Cd = self.blade.drag_coeff[node]
             
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for node in range(self.blade.number_of_nodes):
+                
+                # define lambda function for residual given a node
+                get_residual_node = lambda phi: self.get_residual(node, phi)
+                phi_solution = root_scalar(get_residual_node, method="brentq", bracket=[0,pi/2], rtol=tol, maxiter=iter_max)
+                
+                # now use the root
+                self.blade.phi[node] = phi_solution.root
+                self.blade.update_angle_of_attack(node)
+                self.blade.update_drag_and_lift(node)
+            
+                self.update_factors(node)
+                
+                if not self.silent_mode:
+                    print(f"node:{node:<4} converged:{phi_solution.converged:<3} final iteration:{phi_solution.iterations:<7}")
+            
+        if not self.silent_mode:
+            print()
+            print()
         
-         
+        if (show_results) and (not self.silent_mode):
+            print(f"{'#'*10}  FINAL FACTORS  {'#'*10}")
+            for node in range(self.blade.number_of_nodes):
+                print(
+                    f"{node:<5} a={self.blade.axial_inductance[node]:<10.4f} a'={self.blade.tangential_inductance[node]:<10.4f} phi={rad2deg(self.blade.phi[node]):<7.4f} [deg] twist={rad2deg(self.blade.twist_angles[node]):<7.4f} [deg] alpha={self.blade.angle_of_attack[node]:<7.4f} [deg]")
+            print()
+            print()
+            
 
 
+methods = ["iterative", "root-find"]   
+
+def show_methods():
+    print(methods)
+            
 def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, tangential_initial = -1,
                    tol = 1E-3, max_iterations = 100, silent_mode = False, use_tip_loss = False,
-                   use_hub_loss = False):
-        # return the a problem object in case the user wants to do further analysis or plotting
+                   use_hub_loss = False, method = "root find"):
+    if method not in methods:
+        raise ValueError("ERR: invalid method!")
         
     problem = Problem(silent_mode)
     problem.add_configuration(config_path=configuration_file)
@@ -270,15 +319,22 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
     
     problem.set_parameters(rot_speed=rot_speed,wind_speed=wind_speed)
     problem.apply_ICs(axial_IC=axial_initial, tangential_IC=tangential_initial)
-    problem.compute_factors_iterratively(tol=tol, iter_max=max_iterations)
+    if method == "iterative":
+        problem.compute_factors_iterratively(tol=tol, iter_max=max_iterations)
+    if method == "root-find":
+        problem.compute_factors_by_root_finder(tol=tol, iter_max=max_iterations)
+
+    # now compute results
     problem.calculate_thrust()
     problem.calculate_torque()
     
+    # apply correction factors
     if use_tip_loss:
         problem.apply_tip_loss()
     if use_hub_loss:
         problem.apply_hub_loss()
   
+    # compute final values
     torque, thrust, power = problem.calculate_results()    
     
     
@@ -295,7 +351,10 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
 def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_speed_nodes,
                    rot_speed_start, rot_speed_end, rot_speed_nodes,
                    axial_initial=-1, tangential_initial=-1,
-                   tol = 1E-3, max_iterations = 100, silent_mode = True):
+                   tol = 1E-3, max_iterations = 100, silent_mode = True, use_tip_loss = False,
+                   use_hub_loss = False, method="root-find"):
+    if method not in methods:
+        raise ValueError("ERR: invalid method!")    
     
     problem = Problem(silent_mode=silent_mode)
     problem.add_configuration(config_path=configuration_file)
@@ -310,7 +369,7 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
     
     wind_speeds, rot_speeds = meshgrid(wind_speeds, rot_speeds)
     
-    powers = wind_speeds
+    powers = ones(wind_speeds.shape)
     thrusts = powers
     torques = powers
     
@@ -330,9 +389,22 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         
         problem.set_parameters(wind_speed=wind_speed, rot_speed=rot_speed)
         problem.apply_ICs(axial_IC=axial_initial, tangential_IC=tangential_initial)
-        problem.compute_factors_iterratively(tol, max_iterations)
+        
+        if method == "iterative":
+            problem.compute_factors_iterratively(tol=tol, iter_max=max_iterations)
+        if method == "root-find":
+            problem.compute_factors_by_root_finder(tol=tol, iter_max=max_iterations)
+
+
         problem.calculate_thrust()
         problem.calculate_torque()
+        
+        # apply correction factors
+        if use_tip_loss:
+            problem.apply_tip_loss()
+        if use_hub_loss:
+            problem.apply_hub_loss()
+        
         Q, T, P = problem.calculate_results()
         
         print(f"Power:{P/1E6:<8.6}MW Torque:{Q/1E6:<8.6}MNm Thrust:{T/1E6:<8.6}MN")
@@ -344,5 +416,6 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         
         
     print(f"Max power:{amax(powers/1E6):<8.5}MW")
+    
     return torques, thrusts, powers, wind_speeds, rot_speeds
         
