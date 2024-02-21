@@ -1,7 +1,8 @@
 from .blade_geometry import BladeGeometry
 from .correction_factors import *
-from math import atan, sin, cos, sqrt, pi
-from numpy import isnan, deg2rad, rad2deg, linspace, meshgrid, ones
+from math import atan, sin, cos, pi
+from numpy import isnan, deg2rad, rad2deg, linspace, meshgrid, ones, dstack, ndenumerate, ndindex, amax
+from scipy import optimize
 
 
 class Problem:
@@ -75,7 +76,8 @@ class Problem:
         self.blade.tangential_inductance = tangential_IC
         self.blade.calculate_solidity()
         self.blade.calculate_chord_solidity()
-        self.update_phi()
+        for node in range(self.blade.number_of_nodes):
+            self.update_phi(node)
         self.blade.update_angle_of_attack()
         self.blade.update_drag_and_lift()
         if not self.silent_mode:
@@ -87,46 +89,61 @@ class Problem:
             print()
 
     # update the phi angle using the current axial and tangential inducantce factors
-    def update_phi(self):
+    def update_phi(self, specific_node):
+        if specific_node in range(self.blade.number_of_nodes):
+            axial_inductance = self.blade.axial_inductance[specific_node]
+            tangential_inductance  = self.blade.tangential_inductance[specific_node]
+            radial_distance = self.blade.radial_distances[specific_node]
+            
+            phi = self.calculate_phi(axial_inductance,tangential_inductance,radial_distance)
+        
+            self.blade.phi[specific_node] = phi
+    
+        else:
+            raise("ERR: node out of range!")
+            
+            
+    def calculate_phi(self, axial_inductance, tangential_inductance, radial_distance):
         temp = self.wind_speed/self.rot_speed
-        numer = 0
-        denom = 0
-
-        for node in range(self.blade.number_of_nodes):
-            numer = (1-self.blade.axial_inductance[node])*temp
-            denom = (
-                1+self.blade.tangential_inductance[node])*self.blade.radial_distances[node]
-            self.blade.phi[node] = atan(numer/denom)
-
-            if isnan(self.blade.phi[node]):
-                print("ERR: DIVERGENCE")
-                raise ("ERR: Iteration has diverged!")
+        numer = (1-axial_inductance) * temp
+        denom = (1+tangential_inductance) * radial_distance
+            
+        phi = atan(numer/denom)
+            
+        if isnan(phi):
+            raise("ERR: phi diverged!")
+            
+        return phi
+    
 
     # update the axial and tangential inductance factors using the current phi value
-    def update_factors(self):
-        B = self.blade.B
-        Cx = 0
-        Cy = 0
-
-        sinphi = 0
-        cosphi = 0
-
-        for node, (phi, Cl, Cd, sigma) in enumerate(zip(self.blade.phi,
-                                                        self.blade.lift_coeff,
-                                                        self.blade.drag_coeff,
-                                                        self.blade.chord_solidity)):
-            sinphi = sin(phi)
-            cosphi = cos(phi)
-            Cx = Cl * cosphi + Cd * sinphi
-            Cy = Cl * sinphi - Cd * cosphi
-
-            self.blade.axial_inductance_prev[node] = self.blade.axial_inductance[node]
-            self.blade.tangential_inductance_prev[node] = self.blade.tangential_inductance[node]
-
-            self.blade.axial_inductance[node] = 1 / \
-                (4*sinphi**2 / (sigma * Cx) + 1)
-            self.blade.tangential_inductance[node] = 1 / \
-                (4*sinphi*cosphi/(sigma * Cy) - 1)
+    def update_factors(self, specific_node):
+        if specific_node in range(self.blade.number_of_nodes):
+            phi = self.blade.phi[specific_node]
+            Cl = self.blade.lift_coeff[specific_node]
+            Cd = self.blade.drag_coeff[specific_node]
+            chord_solidity = self.blade.chord_solidity[specific_node]
+            
+            axial_inductance, tangential_inductance = self.calculate_factors(phi, Cl, Cd, chord_solidity)
+            
+            self.blade.axial_inductance[specific_node] = axial_inductance
+            self.blade.tangential_inductance[specific_node] = tangential_inductance
+        else:
+            raise("ERR: node out of range!")
+        
+            
+    def calculate_factors(self, phi, Cl, Cd, chord_solidity):
+        sinphi = sin(phi)
+        cosphi = cos(phi)
+        Cx = Cl * cosphi + Cd * sinphi
+        Cy = Cl * sinphi - Cd * cosphi
+        
+        axial_inductance = 1 / \
+                    (4*sinphi**2 / (chord_solidity * Cx) + 1)
+        tangential_inductance = 1 / \
+                    (4*sinphi*cosphi/(chord_solidity * Cy) - 1)
+                    
+        return axial_inductance, tangential_inductance
 
     # calcualtes the power from the tangential and axial inductances
     def calculate_torque(self):
@@ -166,76 +183,77 @@ class Problem:
             self.thrust_elements[i] *= factor
         
 
-    def append_new_results(self):
-        # thrust = self.calculate_thrust()
-        # torque = self.calculate_torque()
-
+    def calculate_results(self):
         (torque, thrust) = self.get_torque_and_thrust()
-
         power = torque * self.rot_speed
-
-        self.thrust.append(thrust)
-        self.torque.append(torque)
-        self.power.append(power)
-
-    # returns L_2 error squared
-
-    def find_err(self):
-        sum = 0
-        for node in range(self.blade.number_of_nodes):
-            sum += (self.blade.axial_inductance[node] - self.blade.axial_inductance_prev[node])**2 + (
-                self.blade.tangential_inductance[node] - self.blade.tangential_inductance_prev[node])**2
-        return sum
+        return torque, thrust, power
+        
 
     # produces a single run until either convergence to the defined tolerance or max interations is met.
-    def compute_factors(self, tol: float, iter_max: int, show_iterations=False, show_results=True):
+    def compute_factors_iterratively(self, tol: float, iter_max: int, show_iterations=False, show_results=True):
+        
         if not self.silent_mode:
-            print(f"{'#'*10}  COMPUTE FACTORS  {'#'*10}")
-
-        converged = False
-        iter = 0
-        while iter < iter_max:
-            self.update_factors()
-            self.err.append(sqrt(self.find_err()))
-            if show_iterations:
-                print("iteration: ", iter, "err: ", self.err[-1])
-
-            self.update_phi()
-            self.blade.update_angle_of_attack()
-            self.blade.update_drag_and_lift()
-
-            if (isnan(self.err[-1])):
-                break
-
-            if (self.err[-1] < tol):
-                break
-            iter += 1
-
+            print(f"{'#'*10}  COMPUTE FACTORS (ITERATION)  {'#'*10}")
+        
+        for node in range(self.blade.number_of_nodes):
+            iter = 0
+            converged = False
+            while iter < iter_max:
+                # change previous factors stored
+                self.blade.axial_inductance_prev[node] = self.blade.axial_inductance[node]
+                self.blade.tangential_inductance_prev[node] = self.blade.tangential_inductance[node]
+                
+                # update the factors
+                self.update_factors(node)
+                
+                if show_iterations:
+                    print("iteration: {iter} err: {err:<10.5f}")
+                    
+                self.update_phi(node)
+                self.blade.update_angle_of_attack(node)
+                self.blade.update_drag_and_lift(node)
+                
+                err = abs(self.blade.axial_inductance[node] - self.blade.axial_inductance_prev[node])
+                if err < tol:
+                    converged = True
+                    break
+                iter += 1
+                
+            if not self.silent_mode:
+                print(f"node:{node:<4} converged:{converged:<3} final iteration:{iter:<4} final err:{err:<10.8f}")
         if not self.silent_mode:
-            print(f"converged:{converged} final iteration:{iter}")
             print()
-            print()
-
+            print()    
+            
         if (show_results) and (not self.silent_mode):
-            print(f"Final Values:")
+            print(f"{'#'*10}  FINAL FACTORS  {'#'*10}")
             for node in range(self.blade.number_of_nodes):
                 print(
-                    f"{node:<5} a={self.blade.axial_inductance[node]:<10.4f} a'={self.blade.tangential_inductance[node]:<10.4f} phi={rad2deg(self.blade.phi[node]):<10.4f} [deg]")
+                    f"{node:<5} a={self.blade.axial_inductance[node]:<10.4f} a'={self.blade.tangential_inductance[node]:<10.4f} phi={rad2deg(self.blade.phi[node]):<7.4f} [deg] twist={rad2deg(self.blade.twist_angles[node]):<7.4f} [deg] alpha={self.blade.angle_of_attack[node]:<7.4f} [deg]")
             print()
             print()
-
-        # produced multiple runs over provided parameters (tip speeds).
-        def multiple_run(self, tol: float, iter_max: int, rot_speeds: list[float], wind_speeds: list[float], axial_IC, tangnetial_IC, show_iterations=True):
-            print("FINISH THIS")
-            if not self.silent_mode():
-                print(f"{'#'*10}  MULTIPLE SOLVE  {'#'*10}")
-
-            # change parameters
-            # apply the ICs
-            # run until convergence
-            # calcualte power and C_p
-            # save to
             
+    def get_residual(self, node, phi):
+        # update the phi to the new test value
+        self.blade.phi[node] = phi
+        
+        # update angle of attack and get new drag and lift
+        self.blade.update_angle_of_attack(node)
+        self.blade.update_drag_and_lift(node)
+        
+            
+    def compute_factors_by_root_finder(self):
+        if not self.silent_mode:
+            print(f"{'#'*10}  COMPUTE FACTORS (ROOT FINDER)  {'#'*10}")
+        
+        for node in range(self.blade.number_of_nodes):
+            radial_distance = self.blade.radial_distances[node]
+            Cl = self.blade.lift_coeff[node]
+            Cd = self.blade.drag_coeff[node]
+            
+        
+         
+
 
 def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, tangential_initial = -1,
                    tol = 1E-3, max_iterations = 100, silent_mode = False, use_tip_loss = False,
@@ -252,7 +270,7 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
     
     problem.set_parameters(rot_speed=rot_speed,wind_speed=wind_speed)
     problem.apply_ICs(axial_IC=axial_initial, tangential_IC=tangential_initial)
-    problem.compute_factors(tol=tol, iter_max=max_iterations)
+    problem.compute_factors_iterratively(tol=tol, iter_max=max_iterations)
     problem.calculate_thrust()
     problem.calculate_torque()
     
@@ -260,16 +278,14 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
         problem.apply_tip_loss()
     if use_hub_loss:
         problem.apply_hub_loss()
+  
+    torque, thrust, power = problem.calculate_results()    
     
-    problem.append_new_results()
     
-    torque = problem.torque[-1]
-    thrust = problem.thrust[-1]
-    power = problem.power[-1]
-    
-    print(f"Torque {torque/1E6} MNm")
-    print(f"Thrust {thrust/1E6} MN")
-    print(f"Power {power/1E6} MW")
+    print(f"{'#'*10}  FINAL RESULTS  {'#'*10}")
+    print(f"Torque {torque/1E6:<10.5f} MNm")
+    print(f"Thrust {thrust/1E6:<10.5f} MN")
+    print(f"Power  {power/1E6:<10.5f} MW")
     
     return problem, torque, thrust, power
 
@@ -294,35 +310,39 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
     
     wind_speeds, rot_speeds = meshgrid(wind_speeds, rot_speeds)
     
-    powers = ones(wind_speeds.shape)
+    powers = wind_speeds
     thrusts = powers
     torques = powers
     
-    ## A PROBLEM IS HERE SOMEWHERE ##
     
-    for wind_speed_index in range(wind_speed_nodes-1):
-        for rot_speed_index in range(rot_speed_nodes-1):
-            wind_speed = wind_speeds[wind_speed_index][rot_speed_nodes]
-            rot_speed = rot_speeds[wind_speed_index][rot_speed_index]
+    for wind_speed_index, rot_speed_index in ndindex(wind_speeds.shape):
+        
+        wind_speed = wind_speeds[wind_speed_index][rot_speed_index]
+        rot_speed = rot_speeds[wind_speed_index][rot_speed_index]
+        
+        problem.wind_speed = wind_speed
+        problem.rot_speed = rot_speed    
             
-            tsr = problem.blade.R * rot_speed / wind_speed
-            print(f"wind speed:{wind_speed}, rot_speed:{rot_speed}, tsr:{tsr}")
-            
-            problem.err = []
-            problem.set_parameters(wind_speed=wind_speed, rot_speed=rot_speed)
-            problem.apply_ICs(axial_IC=axial_initial, tangential_IC=tangential_initial)
-            problem.compute_factors()
-            problem.calculate_thrust()
-            problem.calculate_torque()
-            problem.append_new_results()
-            
-            torque = problem.torque[-1]
-            thrust = problem.thrust[-1]
-            power = problem.power[-1]
-            
-            torques[wind_speed_index][rot_speed_index] = torque
-            thrusts[wind_speed_index][rot_speed_index] = thrusts
-            power[wind_speed_index][rot_speed_index] = power
-    
-    return torques, thrusts, powers
+        tsr = problem.blade.R * rot_speed / wind_speed
+
+        print(f"parameters: wind speed:{wind_speed:<6.5}, rot_speed:{rot_speed:<6.5}, tsr:{tsr:<6.5}")
+        
+        
+        problem.set_parameters(wind_speed=wind_speed, rot_speed=rot_speed)
+        problem.apply_ICs(axial_IC=axial_initial, tangential_IC=tangential_initial)
+        problem.compute_factors_iterratively(tol, max_iterations)
+        problem.calculate_thrust()
+        problem.calculate_torque()
+        Q, T, P = problem.calculate_results()
+        
+        print(f"Power:{P/1E6:<8.6}MW Torque:{Q/1E6:<8.6}MNm Thrust:{T/1E6:<8.6}MN")
+        print()
+        
+        torques[wind_speed_index][rot_speed_index] = Q
+        thrusts[wind_speed_index][rot_speed_index] = T
+        powers[wind_speed_index][rot_speed_index] = P
+        
+        
+    print(f"Max power:{amax(powers/1E6):<8.5}MW")
+    return torques, thrusts, powers, wind_speeds, rot_speeds
         

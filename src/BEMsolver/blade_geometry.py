@@ -110,12 +110,18 @@ class BladeGeometry:
             print()
             self.print_details()
     
-    def update_angle_of_attack(self):
-        self.angle_of_attack = rad2deg(self.phi - self.twist_angles)
+    def update_angle_of_attack(self, node = -1):
+        if node == -1:
+            self.angle_of_attack = rad2deg(self.phi - self.twist_angles)
+        else:
+            self.angle_of_attack[node] = rad2deg(self.phi[node] - self.twist_angles[node])
         
-    def update_drag_and_lift(self):
-        for ind in range(self.number_of_nodes):
-            self.lift_coeff[ind], self.drag_coeff[ind] = (self.aerofoil_dict[self.aerofoil_type[ind]]).get_coeff(self.angle_of_attack[ind])
+    def update_drag_and_lift(self, node = -1):
+        if node == -1:
+            for ind in range(self.number_of_nodes):
+                self.lift_coeff[ind], self.drag_coeff[ind] = (self.aerofoil_dict[self.aerofoil_type[ind]]).get_coeff(self.angle_of_attack[ind])
+        else:
+            self.lift_coeff[node], self.drag_coeff[node] = (self.aerofoil_dict[self.aerofoil_type[node]]).get_coeff(self.angle_of_attack[node])
 
             
             
