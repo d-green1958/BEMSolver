@@ -58,7 +58,6 @@ class BladeGeometry:
     def calculate_chord_solidity(self):
         temp = self.B/(2* pi)
         self.chord_solidity = temp*self.chord_lengths/self.radial_distances
-        # print(self.chord_solidity)
         
     def read_configuration(self, file_path: str):
         config_name = (file_path.split('/')[-1]).split(".case")[0]

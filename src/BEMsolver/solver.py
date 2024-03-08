@@ -150,10 +150,8 @@ class Problem:
         Cx = Cl * cosphi + Cd * sinphi
         Cy = Cl * sinphi - Cd * cosphi
         
-        axial_inductance = 1 / \
-                    (4*sinphi**2 / (chord_solidity * Cx) + 1)
-        tangential_inductance = 1 / \
-                    (4*sinphi*cosphi/(chord_solidity * Cy) - 1)
+        axial_inductance = 1 / (4*sinphi**2 / (chord_solidity * Cx) + 1)
+        tangential_inductance = 1 / (4*sinphi*cosphi/(chord_solidity * Cy) - 1)
                     
         return axial_inductance, tangential_inductance
 
@@ -177,6 +175,7 @@ class Problem:
     def apply_tip_loss(self):
         R = self.blade.R
         B = self.blade.B
+        print("B =",B)
         tsr = self.tip_speed_ratio
         for i, (r, a, phi) in enumerate(zip(self.blade.radial_distances, self.blade.axial_inductance, self.blade.phi)):
             # factor = prandtl_tip_loss_factor(r, R, B, phi)
@@ -321,7 +320,7 @@ def show_methods():
     print(methods)
             
 def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, tangential_initial = -1,
-                   tol = 1E-3, max_iterations = 100, silent_mode = True, use_tip_loss = False,
+                   tol = 1E-5, max_iterations = 100, silent_mode = True, use_tip_loss = False,
                    use_hub_loss = False, method = "root-find"):
     if method not in methods:
         raise ValueError("ERR: invalid method!")
@@ -388,14 +387,16 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
 def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_speed_nodes,
                    rot_speed_start, rot_speed_end, rot_speed_nodes,
                    axial_initial=-1, tangential_initial=-1,
-                   tol = 1E-3, max_iterations = 100, silent_mode = True, use_tip_loss = True,
+                   tol = 1E-5, max_iterations = 100, silent_mode = True, use_tip_loss = True,
                    use_hub_loss = True, method="root-find", show_runtime_results = False,
-                   rho = 1.025):
+                   rho = 1.29, B=3):
     if method not in methods:
         raise ValueError("ERR: invalid method!")    
     
     problem = Problem(silent_mode=silent_mode)
     problem.add_configuration(config_path=configuration_file)
+    problem.blade.B = B
+    problem.rho = rho
     
     if axial_initial == -1:
         axial_initial = [1/3]*problem.blade.number_of_nodes
