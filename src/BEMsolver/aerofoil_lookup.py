@@ -1,5 +1,6 @@
 from pandas import read_csv, errors
 from os import path
+from numpy import interp
 
 
 
@@ -39,17 +40,33 @@ class AerofoilLookup:
             
         self.angle_of_attack = data.Alpha
         
-        self.lift_dict = dict(zip(data.Alpha, data.Cl))
-        self.drag_dict = dict(zip(data.Alpha, data.Cd))
+        # Again legacy
+        # self.lift_dict = dict(zip(data.Alpha, data.Cl))
+        # self.drag_dict = dict(zip(data.Alpha, data.Cd))
+        
+        self.C_lift = data.Cl
+        self.C_drag = data.Cd
     
     def round_alpha(self, test_value):
         return min(self.angle_of_attack, key = lambda x: abs(x - test_value))
     
     def get_coeff(self, alpha: float) -> list[float]:
         
-        alpha = self.round_alpha(alpha)
+        # legacy code when alpha was rounded to nearest value
+        # used to find the nearest value of alpha in the list
+        # alpha = self.round_alpha(alpha)
+        # return [self.lift_dict[alpha], self.drag_dict[alpha]]
         
-        return [self.lift_dict[alpha], self.drag_dict[alpha]]
+        # instead use linear interpolation between alpha values
+        
+        Cl = interp(alpha, self.angle_of_attack, self.C_lift)
+        Cd = interp(alpha, self.angle_of_attack, self.C_drag)
+        
+        return [Cl, Cd]
+        
+        
+        
+        
         
 
     

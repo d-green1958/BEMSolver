@@ -424,9 +424,11 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         results_array.append(row)
     
     
-    
+    counter = 0
+    total_counter = wind_speed_nodes*rot_speed_nodes
     for wind_speed_index, rot_speed_index in ndindex(wind_speeds.shape):
-        
+    
+        counter += 1
         
         wind_speed = wind_speeds[wind_speed_index][rot_speed_index]
         rot_speed = rot_speeds[wind_speed_index][rot_speed_index]
@@ -440,6 +442,8 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         tsr = problem.blade.R * rot_speed / wind_speed
 
         if show_runtime_results:
+            print(f"ITERATION NUM:{counter}")
+            print(f"PROGRESS:{100*counter/total_counter:.5}%")
             print(f"parameters: wind speed:{wind_speed:<6.5}, rot_speed:{rot_speed:<6.5}, tsr:{tsr:<6.5}")
         
         
@@ -466,7 +470,7 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         
         results = Result() 
         results.wind_speed = wind_speed
-        results.rot_speed = rot_speed+0
+        results.rot_speed = rot_speed
         results.tip_speed_ratio = problem.tip_speed_ratio
         
         results.sectional_axial_inductance_factor = problem.blade.axial_inductance
@@ -484,12 +488,17 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         results.sectional_iterations = problem.iterations_elements
         results.sectional_convergence = problem.converged_elements
         
-        results.torque_coefficient = C_torque(torque, rho, wind_speed, problem.blade.R)
-        results.power_coefficient = C_power(torque, rho, wind_speed, problem.blade.R)
-        results.thrust_coefficient = C_thrust(torque, rho, wind_speed, problem.blade.R)
+        C_T = C_thrust(thrust, rho, wind_speed, problem.blade.R)
+        C_P = C_power(power, rho, wind_speed, problem.blade.R)
+        C_Q = C_torque(torque, rho, wind_speed, problem.blade.R)
+        
+        results.torque_coefficient = C_Q
+        results.power_coefficient = C_P
+        results.thrust_coefficient = C_T
         
         if show_runtime_results:
             print(f"Power:{power/1E6:<8.6}MW Torque:{torque/1E6:<8.6}MNm Thrust:{thrust/1E6:<8.6}MN")
+            print(f"C_P:{C_P:<8.6} C_Q:{C_Q:<8.6} C_T:{C_T:<8.6}")
             print()
         
         # torques[wind_speed_index][rot_speed_index] = torque
