@@ -1,7 +1,9 @@
 from .blade_geometry import BladeGeometry
+from .results import *
 from .correction_factors import *
+from .utils import C_power, C_thrust, C_torque
 from math import atan, sin, cos, pi
-from numpy import isnan, deg2rad, rad2deg, linspace, meshgrid, ones, dstack, ndenumerate, ndindex, amax
+from numpy import isnan, rad2deg, linspace, meshgrid, ones, ndindex
 from scipy.optimize import root_scalar
 import warnings
 
@@ -20,6 +22,7 @@ class Problem:
 
         self.torque_elements = []
         self.thrust_elements = []
+        # self.power_elements = [] should add this capability
 
         self.torque = []
         self.thrust = []
@@ -28,6 +31,9 @@ class Problem:
         self.torque_coeff = []
         self.thrust_coeff = []
         self.power_coeff = []
+        
+        self.converged_elements = []
+        self.iterations_elements = []
         
 
     # set the parameters used for solving (rotational speed, wind speed, density of air)
@@ -59,6 +65,10 @@ class Problem:
         # now initialise the power and thrust element arrays with the correct size
         self.thrust_elements = [0]*(self.blade.number_of_nodes)
         self.torque_elements = [0]*(self.blade.number_of_nodes)
+        self.power_elements = [0]*(self.blade.number_of_nodes)
+        
+        self.converged_elements = [False]*(self.blade.number_of_nodes)
+        self.iterations_elements = [-1]*(self.blade.number_of_nodes)
 
         if not self.silent_mode:
             print()
@@ -159,6 +169,7 @@ class Problem:
             self.thrust_elements[i] = self.rho * 4 * pi * self.blade.radial_distances[i] * self.blade.radial_differences[i] * \
                 self.blade.axial_inductance[i] * \
                 (1 - self.blade.axial_inductance[i]) * self.wind_speed**2
+                
 
     def get_torque_and_thrust(self):
         return sum(self.torque_elements), sum(self.thrust_elements)
@@ -219,9 +230,12 @@ class Problem:
                 err = abs(self.blade.axial_inductance[node] - self.blade.axial_inductance_prev[node])/abs(self.blade.axial_inductance[node])
                 if err < tol:
                     converged = True
+                    self.converged_elements[node] = True
                     break
                 iter += 1
-                
+            
+            self.iterations_elements[node] = iter    
+            
             if not self.silent_mode:
                 print(f"node:{node:<4} converged:{converged:<3} final iteration:{iter:<7} final err:{err:<10.8f}")
         if not self.silent_mode:
@@ -281,6 +295,9 @@ class Problem:
             
                 self.update_factors(node)
                 
+                self.converged_elements[node] = phi_solution.converged
+                self.iterations_elements[node] = phi_solution.iterations
+                
                 if not self.silent_mode:
                     print(f"node:{node:<4} converged:{phi_solution.converged:<3} final iteration:{phi_solution.iterations:<7}")
             
@@ -304,8 +321,8 @@ def show_methods():
     print(methods)
             
 def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, tangential_initial = -1,
-                   tol = 1E-3, max_iterations = 100, silent_mode = False, use_tip_loss = False,
-                   use_hub_loss = False, method = "root find"):
+                   tol = 1E-3, max_iterations = 100, silent_mode = True, use_tip_loss = False,
+                   use_hub_loss = False, method = "root-find"):
     if method not in methods:
         raise ValueError("ERR: invalid method!")
         
@@ -337,13 +354,33 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
     # compute final values
     torque, thrust, power = problem.calculate_results()    
     
+    if not silent_mode:
+        print(f"{'#'*10}  FINAL RESULTS  {'#'*10}")
+        print(f"Torque {torque/1E6:<10.5f} MNm")
+        print(f"Thrust {thrust/1E6:<10.5f} MN")
+        print(f"Power  {power/1E6:<10.5f} MW")
     
-    print(f"{'#'*10}  FINAL RESULTS  {'#'*10}")
-    print(f"Torque {torque/1E6:<10.5f} MNm")
-    print(f"Thrust {thrust/1E6:<10.5f} MN")
-    print(f"Power  {power/1E6:<10.5f} MW")
+    # create a results object to return
+    results = Result() 
+    results.wind_speed = wind_speed
+    results.rot_speed = rot_speed
+    results.tip_speed_ratio = problem.tip_speed_ratio
     
-    return problem, torque, thrust, power
+    results.sectional_axial_inductance_factor = problem.blade.axial_inductance
+    results.sectional_tangential_inductance_factor = problem.blade.tangential_inductance
+    
+    results.sectional_torque = problem.torque_elements
+    results.sectional_thrust = problem.thrust_elements
+    
+    results.power = power
+    results.thrust = thrust
+    results.torque = torque
+    
+    results.sectional_iterations = problem.iterations_elements
+    results.sectional_convergence = problem.converged_elements
+    
+    
+    return results
 
 
 
@@ -351,8 +388,9 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
 def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_speed_nodes,
                    rot_speed_start, rot_speed_end, rot_speed_nodes,
                    axial_initial=-1, tangential_initial=-1,
-                   tol = 1E-3, max_iterations = 100, silent_mode = True, use_tip_loss = False,
-                   use_hub_loss = False, method="root-find"):
+                   tol = 1E-3, max_iterations = 100, silent_mode = True, use_tip_loss = True,
+                   use_hub_loss = True, method="root-find", show_runtime_results = False,
+                   rho = 1.025):
     if method not in methods:
         raise ValueError("ERR: invalid method!")    
     
@@ -373,18 +411,36 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
     thrusts = powers
     torques = powers
     
+    obj = Result()
+    # results_array = [[obj]*wind_speed_nodes]*rot_speed_nodes
+    results_array = []
+    
+    
+    for wind_speed_index in range(len(wind_speeds)):
+        row = []
+        for rot_speed_index in range(len(rot_speeds[wind_speed_index])):
+            obj = Result()
+            row.append(obj)
+        results_array.append(row)
+    
+    
     
     for wind_speed_index, rot_speed_index in ndindex(wind_speeds.shape):
         
+        
         wind_speed = wind_speeds[wind_speed_index][rot_speed_index]
         rot_speed = rot_speeds[wind_speed_index][rot_speed_index]
+        
+        # print(wind_speed)
+        # print(rot_speed)
         
         problem.wind_speed = wind_speed
         problem.rot_speed = rot_speed    
             
         tsr = problem.blade.R * rot_speed / wind_speed
 
-        print(f"parameters: wind speed:{wind_speed:<6.5}, rot_speed:{rot_speed:<6.5}, tsr:{tsr:<6.5}")
+        if show_runtime_results:
+            print(f"parameters: wind speed:{wind_speed:<6.5}, rot_speed:{rot_speed:<6.5}, tsr:{tsr:<6.5}")
         
         
         problem.set_parameters(wind_speed=wind_speed, rot_speed=rot_speed)
@@ -405,17 +461,42 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         if use_hub_loss:
             problem.apply_hub_loss()
         
-        Q, T, P = problem.calculate_results()
-        
-        print(f"Power:{P/1E6:<8.6}MW Torque:{Q/1E6:<8.6}MNm Thrust:{T/1E6:<8.6}MN")
-        print()
-        
-        torques[wind_speed_index][rot_speed_index] = Q
-        thrusts[wind_speed_index][rot_speed_index] = T
-        powers[wind_speed_index][rot_speed_index] = P
+        torque, thrust, power = problem.calculate_results()
         
         
-    print(f"Max power:{amax(powers/1E6):<8.5}MW")
-    
-    return torques, thrusts, powers, wind_speeds, rot_speeds
+        results = Result() 
+        results.wind_speed = wind_speed
+        results.rot_speed = rot_speed+0
+        results.tip_speed_ratio = problem.tip_speed_ratio
+        
+        results.sectional_axial_inductance_factor = problem.blade.axial_inductance
+        results.sectional_tangential_inductance_factor = problem.blade.tangential_inductance
+        
+        results.sectional_torque = problem.torque_elements
+        results.sectional_thrust = problem.thrust_elements
+        
+        results.power = power
+        results.thrust = thrust
+        results.torque = torque
+        
+        results.rotor_radius = problem.blade.R
+        
+        results.sectional_iterations = problem.iterations_elements
+        results.sectional_convergence = problem.converged_elements
+        
+        results.torque_coefficient = C_torque(torque, rho, wind_speed, problem.blade.R)
+        results.power_coefficient = C_power(torque, rho, wind_speed, problem.blade.R)
+        results.thrust_coefficient = C_thrust(torque, rho, wind_speed, problem.blade.R)
+        
+        if show_runtime_results:
+            print(f"Power:{power/1E6:<8.6}MW Torque:{torque/1E6:<8.6}MNm Thrust:{thrust/1E6:<8.6}MN")
+            print()
+        
+        # torques[wind_speed_index][rot_speed_index] = torque
+        # thrusts[wind_speed_index][rot_speed_index] = thrust
+        # powers[wind_speed_index][rot_speed_index] = power
+        
+        results_array[wind_speed_index][rot_speed_index] = results
+        
+    return results_array
         

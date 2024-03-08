@@ -1,0 +1,19 @@
+# .gitignore
+
+# Virtual environments
+venv/
+
+# Byte-compiled files
+__pycache__/
+
+# Distribution folders
+dist/
+build/
+
+# Compiled Python files
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore environment-specific files
+.env

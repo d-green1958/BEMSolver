@@ -85,10 +85,6 @@ class GraphicalSolver(ctk.CTk):
             raise ValueError
         
         
-        
-        
-            
-        
         return
         
         
