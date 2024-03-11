@@ -1,6 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+
+def show_plots():
+    plt.show()
+
+
 # plot C-P lambda curve
 def plotCPowerTsr(sol, show_now = False, add_to_last_plot = False):
     if not add_to_last_plot:

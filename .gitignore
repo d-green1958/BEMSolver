@@ -17,3 +17,4 @@ build/
 
 # Ignore environment-specific files
 .env
+main.py

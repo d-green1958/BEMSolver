@@ -18,6 +18,7 @@ class AerofoilLookup:
         # path to the aerofoil data directory
         dir_path = path.dirname(__file__)
         self.path = dir_path + dir
+        print("HERE",self.path)
         
         # path to specific file
         self.aerofoil_name = aerofoil_name
