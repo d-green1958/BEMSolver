@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Ignore virtual environment
+venv/
+env/
+env-bak/
+
+# Ignore logs and other generated files
+*.log
+*.csv
+*.sqlite
+
+# Ignore system-specific files
+*.DS_Store
+thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Ignore compiled Python files
+*.pyc
+
+# Ignore coverage reports
+.coverage
+htmlcov/
+
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore any local configuration files
+*.ini
+*.cfg
+
