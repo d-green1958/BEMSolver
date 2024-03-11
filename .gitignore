@@ -42,3 +42,6 @@ htmlcov/
 *.ini
 *.cfg
 
+# Ignore test files
+test*
+
