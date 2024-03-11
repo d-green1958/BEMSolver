@@ -175,7 +175,6 @@ class Problem:
     def apply_tip_loss(self):
         R = self.blade.R
         B = self.blade.B
-        print("B =",B)
         tsr = self.tip_speed_ratio
         for i, (r, a, phi) in enumerate(zip(self.blade.radial_distances, self.blade.axial_inductance, self.blade.phi)):
             # factor = prandtl_tip_loss_factor(r, R, B, phi)
@@ -367,9 +366,12 @@ def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, ta
     
     results.sectional_axial_inductance_factor = problem.blade.axial_inductance
     results.sectional_tangential_inductance_factor = problem.blade.tangential_inductance
+    results.sectional_phi = problem.blade.phi
     
     results.sectional_torque = problem.torque_elements
     results.sectional_thrust = problem.thrust_elements
+    results.sectional_positions = problem.blade.radial_distances
+    results.sectional_chord_lengths = problem.blade.chord_lengths
     
     results.power = power
     results.thrust = thrust
@@ -476,6 +478,7 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
         
         results.sectional_axial_inductance_factor = problem.blade.axial_inductance
         results.sectional_tangential_inductance_factor = problem.blade.tangential_inductance
+        results.sectional_phi = problem.blade.phi
         
         results.sectional_torque = problem.torque_elements
         results.sectional_thrust = problem.thrust_elements

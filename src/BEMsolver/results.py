@@ -10,6 +10,11 @@ class Result:
         self.tip_speed_ratio = None
         self.rotor_radius = None
         
+        # blade data
+        self.sectional_positions = None
+        self.sectional_chord_lengths = None
+        self.sectional_lengths = None
+        
         # sectional results
         self.sectional_torque = None
         self.sectional_thrust = None
