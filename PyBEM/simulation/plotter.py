@@ -17,10 +17,7 @@ def plotCPowerTsr(sol, show_now = False, add_to_last_plot = False):
         for j in i:
             TSR.append(j.tip_speed_ratio)
             CP.append(j.power_coefficient)
-            
-            # TSR.append(j.wind_speed)
-            # CP.append(j.power)
-    
+ 
     arrTSR = np.array(TSR)
     arrCP = np.array(CP)
     p = arrTSR.argsort()

@@ -1,4 +1,4 @@
-# from ..BEMsolver import *
+from simulation import *
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
@@ -38,7 +38,6 @@ class GraphicalSolver(ctk.CTk):
         self.results_label = ctk.CTkLabel(self.results_frame, text="Results", font=ctk.CTkFont(size=20, weight="bold"))
         self.results_label.grid(row=0, column=0, padx=20, pady = 20)
         
-        
 
         self.tabview = ctk.CTkTabview(self, width=400)
         self.tabview.grid(row=0, column=0, padx=10, pady = 20, sticky="nsew")
@@ -57,42 +56,51 @@ class GraphicalSolver(ctk.CTk):
         self.rot_speed_single = ctk.CTkEntry(self.tabview.tab("Single"),)
         self.rot_speed_single.grid(row = 1, column = 1, pady = 20, padx = 20)
     
-        self.run_button_single = ctk.CTkButton(self.tabview.tab("Single"), text="Run", command=self.run_single)       
+        self.run_button_single = ctk.CTkButton(self.tabview.tab("Single"), text="Run", command=self.run_singleSim)       
         self.run_button_single.grid(row=5, column=2)
         # self.run_button_single.pack()
         
         # PARAMETRIC RUN TAB
         
-    def run_single(self):
+        
+        
+    def run_singleSim(self):
         wind_speed = self.wind_speed_single.get()
         rot_speed = self.rot_speed_single.get()
-        if not wind_speed.isdigit():
-            print("Err: invalid wind speed")
-            messagebox.showerror("Invalid Entry")
-            raise TypeError
-        else:
-            wind_speed = float(wind_speed)
+        # if not wind_speed.isdigit():
+        #     print("Err: invalid wind speed")
+        #     messagebox.showerror("Invalid Entry")
+        #     raise TypeError
+        # else:
+        #     wind_speed = float(wind_speed)
             
-        if not rot_speed.isdigit():
-            print("Err: invalid rotational speed")
-            messagebox.showerror("Invalid Entry")
-            raise TypeError
-        else:
-            rot_speed = float(rot_speed)
+        # if not rot_speed.isdigit():
+        #     print("Err: invalid rotational speed")
+        #     # messagebox.showerror("Invalid Entry")
+        #     raise TypeError
+        # else:
+        #     rot_speed = float(rot_speed)
         
-        if (wind_speed < 0) or (rot_speed < 0):
-            messagebox.showerror("Invalid Entry")
-            raise ValueError
+        # if (wind_speed < 0) or (rot_speed < 0):
+        #     messagebox.showerror("Invalid Entry")
+        #     raise ValueError
         
+        wind_speed = float(wind_speed)
+        rot_speed = float(rot_speed)
+        
+        
+        config_path = "/home/dylan/BEMSolver/PyBEM/reference_cases/NREL_5MW.case"
+        sol = single_run(config_path, wind_speed, rot_speed)
+        
+        print(rot_speed, wind_speed)
+        print(sol.power)
         
         return
         
         
         
-        
-        
 
-
+# legacy
 if __name__ == "__main__":
     app = GraphicalSolver()
     app.mainloop()

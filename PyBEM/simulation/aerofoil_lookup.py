@@ -6,11 +6,12 @@ from numpy import interp
 
 # class used to lookup and import aerofoil data
 class AerofoilLookup:
-    def __init__(self, aerofoil_name: str, dir: str = "/aerofoil_data/"):
+    def __init__(self, aerofoil_name: str, dir: str = "/../aerofoil_data/"):
         # create empty arrays
         self.angle_of_attack = []
         self.C_drag = []
         self.C_lift = []
+        
         
         self.drag_dict = {}
         self.lift_dict = {}
@@ -18,7 +19,6 @@ class AerofoilLookup:
         # path to the aerofoil data directory
         dir_path = path.dirname(__file__)
         self.path = dir_path + dir
-        print("HERE",self.path)
         
         # path to specific file
         self.aerofoil_name = aerofoil_name
