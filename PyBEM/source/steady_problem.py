@@ -1,13 +1,12 @@
 from .blade_geometry import BladeGeometry
 from .results import *
 from .correction_factors import *
-from .utils import C_power, C_thrust, C_torque
 from math import atan, sin, cos, pi
-from numpy import isnan, rad2deg, linspace, meshgrid, ones, ndindex
+from numpy import isnan, rad2deg
 from scipy.optimize import root_scalar
 import warnings
 
-class Problem:
+class steadyProblem:
     def __init__(self, silent_mode=False):
         self.silent_mode = silent_mode
 

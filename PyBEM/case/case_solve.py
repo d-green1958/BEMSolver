@@ -12,7 +12,6 @@ def make_case():
         print(">> building aerofoilData dir")
         os.mkdir("turbineProps/aerofoilData")
         
-        
     if "simProps" not in list:
         print(">> building simProps dir")
         os.mkdir("simProps")

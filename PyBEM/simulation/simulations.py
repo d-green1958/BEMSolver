@@ -1,12 +1,11 @@
-from .problem import *
-
-
+from source import steadyProblem, Result, C_power, C_thrust, C_torque
+from numpy import ndindex, meshgrid, linspace, ones
             
 def single_run(configuration_file, wind_speed, rot_speed, axial_initial = -1, tangential_initial = -1,
                    tol = 1E-5, max_iterations = 100, silent_mode = True, use_tip_loss = False,
                    use_hub_loss = False, method = "root-find"):
         
-    problem = Problem(silent_mode)
+    problem = steadyProblem(silent_mode)
     
     methods = problem.methods
     
@@ -80,7 +79,7 @@ def parametric_run(configuration_file, wind_speed_start, wind_speed_end, wind_sp
                    tol = 1E-5, max_iterations = 100, silent_mode = True, use_tip_loss = True,
                    use_hub_loss = True, method="root-find", show_runtime_results = False,
                    rho = 1.29, B=3): 
-    problem = Problem(silent_mode=silent_mode)
+    problem = steadyProblem(silent_mode=silent_mode)
     methods = problem.methods
     
     if method not in methods:
