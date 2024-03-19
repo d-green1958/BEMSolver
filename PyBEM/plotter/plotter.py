@@ -1,13 +1,15 @@
-import matplotlib.pyplot as plt
-import numpy as np
+
 
 
 def show_plots():
+    import matplotlib.pyplot as plt
     plt.show()
 
 
 # plot C-P lambda curve
 def plotCPowerTsr(sol, show_now = False, add_to_last_plot = False):
+    import matplotlib.pyplot as plt
+    import numpy as np
     if not add_to_last_plot:
         plt.figure(num="Power-Lambda")
     TSR = []
@@ -42,6 +44,8 @@ def plotCPowerTsr(sol, show_now = False, add_to_last_plot = False):
     
     
 def plotCTorqueTsr(sol, show_now = False, add_to_last_plot = False):
+    import matplotlib.pyplot as plt
+    import numpy as np
     if not add_to_last_plot:
         plt.figure(num="Torque-Lambda")
     TSR = []
@@ -74,6 +78,8 @@ def plotCTorqueTsr(sol, show_now = False, add_to_last_plot = False):
     
 # plot C-P lambda curve
 def plotCThrustTsr(sol, show_now = False, add_to_last_plot = False):
+    import matplotlib.pyplot as plt
+    import numpy as np
     if not add_to_last_plot:
         plt.figure(num="Thrust-Lambda")
     TSR = []
@@ -107,6 +113,8 @@ def plotCThrustTsr(sol, show_now = False, add_to_last_plot = False):
     
     
 def plotAllCoeffsTsr(sol, show_now = False):    
+    import matplotlib.pyplot as plt
+    import numpy as np
     fig, (ax1, ax2, ax3) = plt.subplot(1,3, num="All Coefficients-Lambda")
     
     # FINISH THIS!
@@ -151,7 +159,9 @@ def plotAllCoeffsTsr(sol, show_now = False):
         
 
     
-def plotBladeLoads(result, show_now = False):    
+def plotBladeLoads(result, show_now = False):  
+    import matplotlib.pyplot as plt
+    import numpy as np  
     fig, axs = plt.subplots(ncols=1, nrows=3)
     
     radial_positions = result.sectional_positions
