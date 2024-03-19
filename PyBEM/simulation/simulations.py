@@ -210,4 +210,9 @@ class steadySim():
             results_array[wind_speed_index][rot_speed_index] = results
             
         return results_array
+    
+    
+    
+    
+
             

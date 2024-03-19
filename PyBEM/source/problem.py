@@ -1,43 +1,14 @@
 from .blade_geometry import BladeGeometry
-from .results import *
+from .results import Result
 from .correction_factors import *
 from math import atan, sin, cos, pi
 from numpy import isnan, rad2deg
 from scipy.optimize import root_scalar
 import warnings
 
-class steadyProblem:
-    def __init__(self, silent_mode=False):
-        self.silent_mode = silent_mode
-
-        self.blade = BladeGeometry(silent_mode)
-        self.tip_speed_ratio = 0
-        self.rot_speed = 0
-        self.wind_speed = 0
-        self.rho = 1.29  # density of air (kg m^-3)
-
-        self.err = []
-
-        self.torque_elements = []
-        self.thrust_elements = []
-        # self.power_elements = [] should add this capability
-
-        self.torque = []
-        self.thrust = []
-        self.power = []
-
-        self.torque_coeff = []
-        self.thrust_coeff = []
-        self.power_coeff = []
-        
-        self.converged_elements = []
-        self.iterations_elements = []
-        
-        self.methods = ["iterative", "root-find"]   
-
-        
-
-    # set the parameters used for solving (rotational speed, wind speed, density of air)
+class problem:
+    def __init__(self, silent_mode=False): 
+        pass
 
     def set_parameters(self, rot_speed, wind_speed, rho=1.29):
         if not self.silent_mode:
@@ -75,7 +46,12 @@ class steadyProblem:
             print()
             print()
 
-    def apply_ICs(self, axial_IC, tangential_IC: list[float]):
+    def apply_ICs(self, axial_IC = -1, tangential_IC = -1):
+        if axial_IC == -1:
+            axial_IC = [1/3] * self.blade.number_of_nodes
+            
+        if tangential_IC == -1:
+            tangential_IC = [0] *self.blade.number_of_nodes
 
         if not self.silent_mode:
             print(f"{'#'*10}  INITIAL CONDITIONS  {'#'*10}")
@@ -201,6 +177,39 @@ class steadyProblem:
         return torque, thrust, power
         
 
+    
+
+
+
+class steadyProblem(problem):
+    def __init__(self, silent_mode=False):
+        self.silent_mode = silent_mode
+
+        self.blade = BladeGeometry(silent_mode)
+        self.tip_speed_ratio = 0
+        self.rot_speed = 0
+        self.wind_speed = 0
+        self.rho = 1.29  # density of air (kg m^-3)
+
+        self.err = []
+
+        self.torque_elements = []
+        self.thrust_elements = []
+        # self.power_elements = [] should add this capability
+
+        self.torque = []
+        self.thrust = []
+        self.power = []
+
+        self.torque_coeff = []
+        self.thrust_coeff = []
+        self.power_coeff = []
+        
+        self.converged_elements = []
+        self.iterations_elements = []
+        
+        self.methods = ["iterative", "root-find"]   
+        
     # produces a single run until either convergence to the defined tolerance or max interations is met.
     def compute_factors_iterratively(self, tol: float, iter_max: int, show_iterations=False, show_results=True):
         
@@ -314,3 +323,56 @@ class steadyProblem:
     
     def get_methods(self):
         return self.methods()
+        
+    
+    
+        
+class unsteadyProblem(problem):
+    def __init__(self, silent_mode=False):
+        self.silent_mode = silent_mode
+
+        self.blade = BladeGeometry(silent_mode)
+        self.tip_speed_ratio = 0
+        self.rot_speed = 0
+        self.wind_speed = 0
+        self.rho = 1.29  # density of air (kg m^-3)
+
+        self.err = []
+
+        self.torque_elements = []
+        self.thrust_elements = []
+        # self.power_elements = [] should add this capability
+
+        self.torque = []
+        self.thrust = []
+        self.power = []
+
+        self.torque_coeff = []
+        self.thrust_coeff = []
+        self.power_coeff = []
+        
+        self.converged_elements = []
+        self.iterations_elements = []
+        
+        self.methods = ["iterative", "root-find"]   
+        
+        # additional quantities required for dynamic simulation
+        t = 0 # initial time
+        dt = 0 # set as 0 for now
+        
+        
+    def filter_induced_velocity(self):
+        import numpy as np
+        
+        axial = np.array(self.blade.axial_inductance)
+        tangential = np.array(self.blade.tangential_inductance)
+        tangential =  axial * self.wind_speed
+        axial = tangential*2*self.rot_speed*np.array(self.blade.radial_distances)
+        
+        W_qs = [axial, tangential]
+        
+        # W_qs = [self.blade.axial_inductance * self.wind_speed,
+        #         2*self.blade.tangential_inductance*self.rot_speed*self.blade.radial_distances]
+        
+        
+    
