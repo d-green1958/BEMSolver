@@ -90,7 +90,8 @@ class GraphicalSolver(ctk.CTk):
         
         
         config_path = "/home/dylan/BEMSolver/PyBEM/reference_cases/NREL_5MW.case"
-        sol = single_run(config_path, wind_speed, rot_speed)
+        sim = PyBEM.simulation.steadySim()
+        sol = sim.single_run(config_path, wind_speed, rot_speed)
         
         print(rot_speed, wind_speed)
         print(sol.power)
