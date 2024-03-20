@@ -357,8 +357,18 @@ class unsteadyProblem(problem):
         self.methods = ["iterative", "root-find"]   
         
         # additional quantities required for dynamic simulation
-        t = 0 # initial time
-        dt = 0 # set as 0 for now
+        self.t = 0 # initial time
+        self.dt = 0 # set as 0 for now
+        
+        # parameters for the Oye dynamic inflow model
+        self.tau_1 = None
+        self.tau_2 = None
+        self.k = None
+        
+        self.W_qs = []
+        self.W_int = []
+        self.W = []
+        
         
         
     def filter_induced_velocity(self):
@@ -369,10 +379,14 @@ class unsteadyProblem(problem):
         tangential =  axial * self.wind_speed
         axial = tangential*2*self.rot_speed*np.array(self.blade.radial_distances)
         
-        W_qs = [axial, tangential]
+        # the quasi steady induced flow
+        self.W_qs.append([axial, tangential])
         
-        # W_qs = [self.blade.axial_inductance * self.wind_speed,
-        #         2*self.blade.tangential_inductance*self.rot_speed*self.blade.radial_distances]
+        
+        
+        
+        
+        
         
         
     

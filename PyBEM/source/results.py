@@ -41,4 +41,13 @@ class Result:
         # possibility to add time varying components i.e. how axial inductance factors change with iterations and errors and other things like this
         
         
+    def __str__(self) -> str:
+        return (f"Results:\n"
+                f"Wind Speed {self.wind_speed}\n"
+                f"Rotational Speed {self.rot_speed}\n"
+                f"Power {self.power/1E6:<10.5f} MW ---> C_P {self.power_coefficient:<10.5f}\n"
+                f"Torque {self.torque/1E6:<10.5f} MW ---> C_Q {self.torque_coefficient:<10.5f}\n"
+                f"Thrust {self.thrust/1E6:<10.5f} MW ---> C_T {self.thrust_coefficient:<10.5f}\n")
+        
+        
         

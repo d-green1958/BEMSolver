@@ -15,3 +15,4 @@ This project still has some work to be done on it:
 - Arrays should be consistent in type. Currently some are stored as lists.
 - Remove redundant code
 - Update comments
+- Package details such as dependencies
