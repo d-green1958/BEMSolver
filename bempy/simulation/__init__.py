@@ -1,4 +1,4 @@
-import PyBEM
+import bempy
 
 from .simulations import *
 

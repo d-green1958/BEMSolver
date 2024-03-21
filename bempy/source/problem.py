@@ -67,6 +67,7 @@ class problem:
         self.blade.calculate_chord_solidity()
         for node in range(self.blade.number_of_nodes):
             self.update_phi(node)
+            # print("updating)
         self.blade.update_angle_of_attack()
         self.blade.update_drag_and_lift()
         if not self.silent_mode:
@@ -302,6 +303,7 @@ class steadyProblem(problem):
                 self.blade.update_drag_and_lift(node)
             
                 self.update_factors(node)
+            
                 
                 self.converged_elements[node] = phi_solution.converged
                 self.iterations_elements[node] = phi_solution.iterations
@@ -327,14 +329,17 @@ class steadyProblem(problem):
     
     
         
-class unsteadyProblem(problem):
+class UnsteadyProblem(problem):
     def __init__(self, silent_mode=False):
         self.silent_mode = silent_mode
 
         self.blade = BladeGeometry(silent_mode)
+        
+        # constant values for now
         self.tip_speed_ratio = 0
-        self.rot_speed = 0
-        self.wind_speed = 0
+        self.rot_speed_const = 0.999
+        self.wind_speed_const = 9.999
+        
         self.rho = 1.29  # density of air (kg m^-3)
 
         self.err = []
@@ -358,35 +363,199 @@ class unsteadyProblem(problem):
         
         # additional quantities required for dynamic simulation
         self.t = 0 # initial time
-        self.dt = 0 # set as 0 for now
+        self.dt = 0.1 # set as 0 for now
         
         # parameters for the Oye dynamic inflow model
         self.tau_1 = None
         self.tau_2 = None
-        self.k = None
+        self.k = 0.6
+        # self.W_qs = []
+        # self.W_int = []
+        # self.W = []
         
-        self.W_qs = []
-        self.W_int = []
-        self.W = []
+        self.W_prev = None
+        self.W_int_prev = None
+        self.W_qs_prev = None
         
+        # parameters for original equilibrium simulation
+        self.equilibrium_tol = 1E-3
+        self.equilibrium_max_iter = 100
+    
+    
+    def update_rot_speed(self, t):
+        self.rot_speed = self.rot_speed # for now this does nothnig to change the dynamics
+        
+    
+    def update_wind_speed(self, t):
+        self.wind_speed = self.wind_speed # again will do nothing to change the dynamics
+        
+        if t < 2:
+            self.wind_speed = 12.1
+        elif t>35:
+            self.wind_speed = 12.5
+        else:
+            self.wind_speed = 11.6
+        
+    def increase_time_step(self):
+        self.t += self.dt
         
         
     def filter_induced_velocity(self):
         import numpy as np
+        t = self.t
+        wind_speed = self.wind_speed
+        print("WIND SPEED:", wind_speed)
+        rot_speed = self.rot_speed 
+        R = self.blade.R
         
-        axial = np.array(self.blade.axial_inductance)
-        tangential = np.array(self.blade.tangential_inductance)
-        tangential =  axial * self.wind_speed
-        axial = tangential*2*self.rot_speed*np.array(self.blade.radial_distances)
+        axial_factor = np.array(self.blade.axial_inductance)
+        tangential_factor = np.array(self.blade.tangential_inductance)
+        radial_distances = np.array(self.blade.radial_distances)
+        
+        axial_induced_velocity =  axial_factor * wind_speed
+        tangential_induced_velocity = tangential_factor*rot_speed*radial_distances
+        
+        tau_1 = 1.1*R / ((1-1.3*axial_factor) * wind_speed)
+        tau_2 = (0.39 - 0.26*(radial_distances/R)**2) * tau_1
+        
+        tau_1 = np.column_stack((tau_1,tau_1))
+        tau_2 = np.column_stack((tau_2,tau_2))
+        
+        
         
         # the quasi steady induced flow
-        self.W_qs.append([axial, tangential])
+        W_qs_cur = np.column_stack((axial_induced_velocity, tangential_induced_velocity))
+        W_qs_prev = self.W_qs_prev
+
+        
+        
+        H = W_qs_cur + self.k * tau_1 * (W_qs_cur - W_qs_prev)/self.dt
+        
+        
+        W_int_prev = self.W_int_prev
+        W_int_cur = H + (W_int_prev-H)*np.exp(-self.dt/tau_1)
+        
+        for i in range(self.blade.number_of_nodes):
+            print(W_int_prev[i][0]- W_int_cur[i][0])
+        
+        # print("TEMP:", np.exp(-self.dt/tau_1))
+        
+        W_prev = self.W_prev
+        W_cur = W_int_cur + (W_prev - W_int_cur)*np.exp(-self.dt/tau_2)
         
         
         
+        # for i in range(self.blade.number_of_nodes):
+        #     print("DELTA:", W_qs_cur[i][0] - W_cur[i][0])
+        # print()
+        # print()
+
         
+        # now update the previous values to the current ones
+        self.W_prev = W_cur
+        self.W_int_prev = W_int_cur
+        self.W_qs_prev = W_qs_cur
         
+    def update_phi_from_previous_induced_vel(self):
+        from numpy import arctan
+        wind_speed = self.wind_speed
         
-        
-        
+        for node in range(self.blade.number_of_nodes):
+            # print("node", node)
+            # print(self.W_prev[node])
+            self.blade.phi[node] = arctan((wind_speed - self.W_prev[node][0])
+                                          /(self.blade.radial_distances[node] + self.W_prev[node][1]))
+            
     
+    def update_inductance_factors_from_previous_induced_vel(self):
+        # self.blade.axial_inductance[:] = self.W_prev[:][0]/self.wind_speed
+        # self.blade.tangential_inductance[:] = self.W_prev[:][1]/(2*self.blade.radial_distances[:]*self.rot_speed)
+        
+        for node in range(self.blade.number_of_nodes):
+            self.blade.axial_inductance[node] = self.W_prev[node][0] / self.wind_speed
+            self.blade.tangential_inductance[node] = self.W_prev[node][1] / (self.rot_speed*self.blade.radial_distances[node])
+        
+        
+    def equilibrate_variables(self):
+        from numpy import array, column_stack
+        # here do the intial equilibrium finding that will be used for the first step of the simulation
+        
+        # use root-finding method to find equilibrium
+        
+        if not self.silent_mode:
+            print(f"{'#'*10}  INITIAL EQUILIBRIUM (ROOT FINDER)  {'#'*10}")
+            
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for node in range(self.blade.number_of_nodes):
+                
+                # define lambda function for residual given a node
+                get_residual_node = lambda phi: self.get_residual(node, phi)
+                phi_solution = root_scalar(get_residual_node, method="brentq", bracket=[0,pi/2], rtol=self.equilibrium_tol, maxiter=self.equilibrium_max_iter)
+                
+                # now use the root
+                self.blade.phi[node] = phi_solution.root
+                self.blade.update_angle_of_attack(node)
+                self.blade.update_drag_and_lift(node)
+                            
+                self.update_factors(node)
+                
+                self.converged_elements[node] = phi_solution.converged
+                self.iterations_elements[node] = phi_solution.iterations
+                
+                if not self.silent_mode:
+                    print(f"node:{node:<4} converged:{phi_solution.converged:<3} final iteration:{phi_solution.iterations:<7}")
+            
+        if not self.silent_mode:
+            print()
+            print()
+            
+        
+        
+        # for i in range(self.blade.number_of_nodes):
+        #     print(i)
+        #     print("axial", self.blade.axial_inductance[i])
+        #     print("tangential", self.blade.tangential_inductance[i], "\n \n")
+            
+    def initialise_induced_velocities(self):
+        from numpy import array, column_stack
+        # now add the initial induction velocities to the arrays
+        wind_speed = self.wind_speed
+        axial_factor = array(self.blade.axial_inductance)
+        tangential_factor = array(self.blade.tangential_inductance)
+        radial_distances = array(self.blade.radial_distances)
+        axial_induced_velocity =  axial_factor * wind_speed
+        tangential_induced_velocity = tangential_factor*2*self.rot_speed*radial_distances
+        
+        W = column_stack((axial_induced_velocity, tangential_induced_velocity))
+        W = W
+        self.W_prev = W
+        self.W_int_prev = W
+        self.W_qs_prev = W
+    
+    def get_residual(self, node, phi):
+        # update the phi to the new test value
+        self.blade.phi[node] = phi
+        
+        # update angle of attack and get new drag and lift
+        self.blade.update_angle_of_attack(node)
+        self.blade.update_drag_and_lift(node)
+        
+        radial_distance = self.blade.radial_distances[node]
+        Cl = self.blade.lift_coeff[node]
+        Cd = self.blade.drag_coeff[node]
+        chord_solidity = self.blade.chord_solidity[node]
+        
+        axial_inductance, tangential_inductance = self.calculate_factors(phi, Cl, Cd, chord_solidity)
+        
+        sinphi = sin(phi)
+        cosphi = cos(phi)
+        
+        temp = self.wind_speed/self.rot_speed
+        
+        term1 = sinphi/(1-axial_inductance)
+        term2 = cosphi*temp/(radial_distance*(1+tangential_inductance))
+        
+        return term1 - term2
+    
+   

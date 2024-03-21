@@ -1,8 +1,16 @@
 from setuptools import setup, find_packages
 
+
+# Define your version here
+version = "1.0.1"
+
+def get_version():
+    return version
+
+
 setup(
-    name='PyBEM',
-    version='1.0',
+    name='bempy',
+    version=get_version(),
     packages=find_packages(),
     install_requires=[
         # Add any dependencies your package needs here
