@@ -31,6 +31,9 @@ sim.initial_rot_speed = 1.1 #rads^-1
 sim.t_max = 20
 sim.dt = 0.1
 
+# set the turbine data
+sim.configuration_file = "bempy/reference_cases/NREL_5MW.case"
+
 # tell the simulation to show run time results
 sim.show_runtime_results = True
 
