@@ -6,6 +6,10 @@ from .aerofoil_lookup import AerofoilLookup
 
 
 class BladeGeometry:
+    """Class designed to store information about the blade such as the angle phi, radial distances
+    (the element position), radial differences (the element length), the angle of attack
+    and the resultant lift and drag coefficients. In addition, it contains a dict
+    for the aerofoil data linking the aerofoil name to a AerofoilLookup class. """
     def __init__(self, silent_mode = False):
         # known quantities 
         self.number_of_nodes = 0 # number of blade sections
@@ -15,6 +19,7 @@ class BladeGeometry:
         self.twist_angles = [] # beta(r)
         self.drag_coeff = [] # C_l
         self.lift_coeff = [] # C_d
+        self.alpha_0 = [] # AOA for no lift
         self.aerofoil_type = [] # the aerofoil type at r
         self.B = 3 # number of blades
         
@@ -90,6 +95,7 @@ class BladeGeometry:
         self.axial_inductance_prev = [0] * length
         self.tangential_inductance_prev = [0] * length
         self.phi = [0] * length
+        self.alpha_0 = [0] * length
                 
         # now add the lookups for the aerofoil data
         for aerofoil_type in unique(config.type):
@@ -100,6 +106,9 @@ class BladeGeometry:
         self.R = list(self.radial_distances)[-1] + 0.5*list(self.radial_differences)[-1]
         self.R_hub = list(self.radial_distances)[0] - 0.5*list(self.radial_differences)[0]
         self.blade_length = round(sum(self.radial_differences),3)
+        
+        for node in range(self.number_of_nodes):
+            self.alpha_0[node] = (self.aerofoil_dict[self.aerofoil_type[node]]).alpha_0
             
         if not self.silent_mode:
             print("Configuration added: ", config_name)

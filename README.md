@@ -1,3 +1,5 @@
+Warning!: This project is very much still in development meaning the documentation/comments and consistency between modules is poor. This will be adressed soon.
+
 # BEMSolver
 bempy, a **B**lade **E**lement **M**omentum theory **PY**thon package for rotor simulations. 
 <p align="center">

@@ -390,6 +390,10 @@ class UnsteadyProblem(problem):
         # parameters for original equilibrium simulation
         self.equilibrium_tol = 1E-3
         self.equilibrium_max_iter = 100
+        
+    # for dynamic stall calculations
+        
+    
 
     def update_rot_speed(self, t):
         self.rot_speed = self.rot_speed  # for now this does nothnig to change the dynamics

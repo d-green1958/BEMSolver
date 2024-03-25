@@ -25,6 +25,8 @@ class AerofoilLookup:
         
         # load the data
         self.load_data()
+        
+        self.alpha_0 = self.find_alpha_0()
     
     def __str__(self):
         return "AerofoilLookup: data - " + self.aerofoil_name
@@ -64,11 +66,29 @@ class AerofoilLookup:
         Cd = interp(alpha, self.angle_of_attack, self.C_drag)
         
         return [Cl, Cd]
+    
+    def find_alpha_0(self):
+        # import matplotlib.pyplot as plt
+        # plt.plot(self.angle_of_attack, self.C_lift)
+        # plt.title(self.aerofoil_name)
+        # plt.show()
+        def Cl_interp(alpha):
+                return interp(alpha, self.angle_of_attack, self.C_lift)
         
         
-        
-        
-        
-
+        if all(Cl == self.C_lift[0] for Cl in self.C_lift):
+            print("CYLINDER!!!!", self.aerofoil_name)
+            return 0
+        else:
+            print("FINDING ALPHA 0")
+            from scipy.optimize import root_scalar
+            
+            # we assume the bracket to be -50,+50 since there will be roots near
+            # +90 and -90 degs.
+            result = root_scalar(Cl_interp, bracket=[-50, 50])
+            print(self.aerofoil_name)
+            print(result.root, Cl_interp(result.root))
+            return result.root
     
     
+        
