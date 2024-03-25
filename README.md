@@ -4,7 +4,7 @@ PyBEM, a blade element momentum theory solver for rotor simulations.
   <img src="https://github.com/d-green1958/BEMSolver/assets/120178639/134f946d-d405-4df5-993f-9261fc4a6957" width = "100">
 </p>
 
-'''python
+```python
 # import the package
 import bempy
 
@@ -25,4 +25,4 @@ sim.show_runtime_results = True
 # check the simulation is ready and run!
 if sim.check_ready(False):
     sim.run()
-'''
+```
