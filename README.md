@@ -21,7 +21,7 @@ pip install /path/to/your/package
 import bempy
 
 # define a dynamic simulation
-sim = sim = bempy.simulation.DynamicSim()
+sim = bempy.simulation.DynamicSim()
 
 # set the initial conditions
 sim.initial_wind_speed = 12.1 #ms^-1
