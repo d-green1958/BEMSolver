@@ -379,6 +379,13 @@ class UnsteadyProblem(problem):
         self.W_prev = None
         self.W_int_prev = None
         self.W_qs_prev = None
+        
+        # parameters for Oye dynamic stall model
+        self.k_tau = 3
+        self.tau_stall = None
+        
+        self.seperation_func_prev = None
+        
 
         # parameters for original equilibrium simulation
         self.equilibrium_tol = 1E-3
