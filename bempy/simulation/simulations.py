@@ -6,8 +6,8 @@ class SteadySim():
     
     def __init__(self):
         # inflow velocity parameter range
-        self.wind_speeds = None
-        self.rot_speeds = None
+        self.wind_speed = None
+        self.rot_speed = None
         
         # default parameters
         self.rho = 1.29
@@ -184,6 +184,7 @@ class SteadySim():
             results_array[wind_speed_index][rot_speed_index] = results
             self.results = results_array
             
+            
         return results_array
     
     
@@ -194,8 +195,12 @@ class SteadySim():
 class DynamicSim():
     def __init__(self):
         # inflow velocity parameter range
-        # self.wind_speeds = None  # these need to be able to be a functino of time 
-        # self.rot_speeds = None
+        self.wind_speed_time_series = None  # these need to be able to be a functino of time 
+        self.rot_speed_time_series = None
+        
+        # intial conditions
+        self.initial_wind_speed = None
+        self.initial_rot_speed = None
 
         # default parameters
         self.rho = 1.29
@@ -205,8 +210,9 @@ class DynamicSim():
         self.tol = 1E-5
         self.max_iterations = 100
         self.method = "root-find"
-        self.t_max = 3
-        self.dt = 0.2
+        self.t_max = 20
+        self.dt = 0.1
+        self.t = None
 
         # initial conditions for simulation
         self.axial_initial=-1
@@ -215,6 +221,7 @@ class DynamicSim():
         # outstream
         self.show_runtime_results = False
         self.silent_mode = True
+        self.show_checks = True
 
         # correction factors
         self.use_tip_loss = True
@@ -224,8 +231,80 @@ class DynamicSim():
         self.configuration_file = None
 
         # outputs
-        self.results = None
+        from source import DynamicResult
+        self.results = DynamicResult()
+        
+        # wind speed evolution
+        self.wind_speed_func = None
+        
         return
+    
+    
+    def check_ready(self, show_checks = True):
+        is_ready = True
+            
+        if show_checks == True:
+            print(f"{'#'*10}  PRE-SIM CHECK {'#'*10}")
+            print()
+            
+            def bool_to_string(boolean):
+                if boolean:
+                    return "True"
+                else:
+                    return "False"
+            
+            def check_variable(variable, name):
+                if variable == None:
+                    print("WARNING!!! ---> " + name + " undefined" + "<--- WARNING!!!")
+                    return False
+                else:
+                    print(name + f": {variable}")
+                    return True
+            
+            variables = [self.initial_wind_speed, self.initial_rot_speed,
+                         self.rho, self.B,
+                         self.t_max, self.dt,
+                         self.configuration_file,
+                         self.max_iterations, self.tol]
+            names = ["Initial wind speed", "Initial rotational speed",
+                     "Density", "Number of blades",
+                     "T_max", "dt",
+                     "Config file",
+                     "Max iterations", "Relative Tolerance"]
+            
+            for i in range(len(variables)):
+                if not check_variable(variables[i], names[i]):
+                    is_ready = False
+            
+            if not is_ready:
+                return False
+            
+            print("Use tip loss: " + bool_to_string(self.use_tip_loss))
+            print("Use hub loss: " + bool_to_string(self.use_hub_loss))
+            
+            if self.wind_speed_func == None:
+                print("Inflow evolution: Default")
+            else:
+                print("Inflow evolution: User defined")
+                
+            # could add more here!
+            
+            questioning = True
+            while questioning == True:
+                print()
+                answer = input("Proceed with simulation? [y/n] \t")
+                if answer.lower() == "y":
+                    return True
+                elif answer.lower() == "n":
+                    return False
+                else:
+                    print("Invalid response!")
+        else:
+            if self.initial_wind_speed == None:
+                is_ready = False
+            if self.initial_rot_speed == None:
+                is_ready = False
+        return is_ready
     
     
     def run(self):
@@ -253,55 +332,96 @@ class DynamicSim():
         configuration_file = self.configuration_file
         t_max = self.t_max
         dt = self.dt
-        wind_speeds = self.wind_speeds
-        rot_speeds = self.rot_speeds
+        wind_speed = self.initial_wind_speed
+        rot_speed = self.initial_rot_speed
         
-        problem = UnsteadyProblem(silent_mode)
-        
-        problem.set_parameters(wind_speed=wind_speeds[0], rot_speed=rot_speeds[0]) # THIS WILL NEED TO BE CHANGED
+        # intialise the problem and set the parameters
+        self.problem = UnsteadyProblem(silent_mode)
+        self.problem.set_parameters(wind_speed=wind_speed, rot_speed=rot_speed) # THIS WILL NEED TO BE CHANGED
+        self.t = self.problem.t
+
         
         # make sure problem has right parameters
-        problem.dt = dt
-        problem.blade.B = self.B
-        problem.rho = self.rho
+        self.problem.dt = dt
+        self.problem.blade.B = self.B
+        self.problem.rho = self.rho
         
         # add the configuration file
-        problem.add_configuration(configuration_file)
-        problem.apply_ICs(axial_initial,tangential_initial)
+        self.problem.add_configuration(configuration_file)
+        self.problem.apply_ICs(axial_initial,tangential_initial)
 
         # find equilibrium values for t=0
-        problem.equilibrate_variables()
-        problem.initialise_induced_velocities()
+        self.problem.equilibrate_variables()
+        self.problem.initialise_induced_velocities()
+
+        # calcualte the results for the intial condition
+        self.torque, self.thrust, self.power = self.problem.calculate_results()
+        self.torque_coeff, self.thrust_coeff, self.power_coeff = self.problem.calculate_coefficients()
         
-        ax_for_plot = []
-        ax_for_plot.append(problem.blade.axial_inductance[10])
+        # add the initial results
+        self.results.add_data(self.problem)
+        self.results.sectional_chord_lengths = self.problem.blade.chord_lengths
+        self.results.sectional_lengths = self.problem.blade.radial_differences
+        self.results.sectional_positions = self.problem.blade.radial_distances
+        self.results.rotor_radius = self.problem.blade.R
         
-        while problem.t < t_max:
-            print("TIME", problem.t)
+                
+        counter = 0
+        while self.problem.t < t_max:            
+            # update the time and the parameters
+            self.problem.increase_time_step()
+            self.problem.update_wind_speed(self.problem.t, self.wind_speed_func)
+            self.problem.update_rot_speed(self.problem.t)    
+            self.t = self.problem.t
+
+
+            # find the equilibrium values
+            self.problem.equilibrate_variables()
+
+            # filer the equilibrium values
+            self.problem.filter_induced_velocity()
             
-            # now increase time step and adjust wind speed and rot speed
-            problem.increase_time_step()
-            problem.update_wind_speed(problem.t)
-            problem.update_rot_speed(problem.t)
+            # use filtered induced velocity to change a,a' and phi
+            self.problem.update_phi_from_previous_induced_vel()
+            self.problem.update_inductance_factors_from_previous_induced_vel()
+
+            # update the angle of attack and lift and drag components with the new value
+            # (this step is non-essential but required if interested in change in AOA,Cl,Cd)
+            for node in range(self.problem.blade.number_of_nodes):
+                self.problem.blade.update_angle_of_attack(node)
+                self.problem.blade.update_drag_and_lift(node)
             
-            # now calculate the new a,a' and phi from previous W
-            # problem.update_phi_from_previous_induced_vel()
-            # for node in range(problem.blade.number_of_nodes):
-            #     problem.update_phi(node)
-            #     problem.blade.update_angle_of_attack(node)
-            #     problem.blade.update_drag_and_lift(node)
-            #     problem.update_factors(node)
+            # apply tip corrections
+            if use_tip_loss:
+                self.problem.apply_tip_loss()
+            if use_hub_loss:
+                self.problem.apply_hub_loss()
             
+            # now calculate the thrust, power and torque
+            self.torque, self.thrust, self.power = self.problem.calculate_results()
+            self.torque_coeff, self.thrust_coeff, self.power_coeff = self.problem.calculate_coefficients()
             
-            problem.equilibrate_variables()
+            # add results    
+            self.results.add_data(self.problem)
             
-            # use new a,a' and phi to calculate new W and filter it
-            problem.filter_induced_velocity()
+            counter += 1
             
-            
-            problem.update_phi_from_previous_induced_vel()
-            problem.update_inductance_factors_from_previous_induced_vel()
+            if show_runtime_results:
+                print(f"Timestep: {counter} ---> Time: {self.problem.t:.4}")
+                print(f"Progress: {(self.problem.t)*100/t_max:.4}%")
+                print(f"Wind Speed: {self.problem.wind_speed:.4}ms^-1   Rotational speed: {self.problem.rot_speed:.4} rasd^-1")
+                print(f"Torque {self.torque/1E6:<10.5f} MNm ---> C_Q {self.torque_coeff:<10.5f}")
+                print(f"Thrust {self.thrust/1E6:<10.5f} MN  ---> C_T {self.thrust_coeff:<10.5f}")
+                print(f"Power  {self.power/1E6:<10.5f} MW  ---> C_P {self.power_coeff:<10.5f}")
+                print("\n \n")
+                    
+        return self.results
         
-            ax_for_plot.append(problem.blade.axial_inductance[8])
         
-        return ax_for_plot
+        
+        
+            
+
+
+        
+  
