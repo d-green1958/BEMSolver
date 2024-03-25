@@ -11,7 +11,7 @@ git clone https://github.com/d-green1958/BEMSolver.git
 ```
 To install using pip run the following command
 ```
-pip install /path/to/your/package
+pip install /path/to/package
 ```
 
 
