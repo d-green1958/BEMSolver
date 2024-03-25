@@ -4,6 +4,18 @@ PyBEM, a blade element momentum theory solver for rotor simulations.
   <img src="https://github.com/d-green1958/BEMSolver/assets/120178639/134f946d-d405-4df5-993f-9261fc4a6957" width = "100">
 </p>
 
+# Installation
+First clone the repository
+```
+git clone https://github.com/d-green1958/BEMSolver.git
+```
+To install using pip run the following command
+```
+pip install /path/to/your/package
+```
+
+
+# Example Usage
 ```python
 # import the package
 import bempy
