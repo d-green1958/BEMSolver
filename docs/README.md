@@ -3,7 +3,6 @@ This project still has some work to be done on it:
 - Glauert Correction Factor
 - Pitch Control
 
-- Dynamic simulation
 - Dynamic stall
 
 - GUI
@@ -16,3 +15,5 @@ This project still has some work to be done on it:
 - Remove redundant code
 - Update comments
 - Package details such as dependencies
+- Change dynamic inflow to be a class for grewater consistency with dynamic stall
+- add Docstrings for all functions and classes

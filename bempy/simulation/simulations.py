@@ -213,6 +213,9 @@ class DynamicSim():
         self.t_max = 20
         self.dt = 0.1
         self.t = None
+        
+        # use dynamic stall
+        self.use_dynamic_stall_model = False
 
         # initial conditions for simulation
         self.axial_initial=-1
@@ -336,10 +339,9 @@ class DynamicSim():
         rot_speed = self.initial_rot_speed
         
         # intialise the problem and set the parameters
-        self.problem = UnsteadyProblem(silent_mode)
+        self.problem = UnsteadyProblem(silent_mode)    
         self.problem.set_parameters(wind_speed=wind_speed, rot_speed=rot_speed) # THIS WILL NEED TO BE CHANGED
         self.t = self.problem.t
-
         
         # make sure problem has right parameters
         self.problem.dt = dt
@@ -349,6 +351,9 @@ class DynamicSim():
         # add the configuration file
         self.problem.add_configuration(configuration_file)
         self.problem.apply_ICs(axial_initial,tangential_initial)
+        if self.use_dynamic_stall_model:
+            self.problem.using_dynamic_stall = True
+            self.problem.initialise_dynamic_stall_model()
 
         # find equilibrium values for t=0
         self.problem.equilibrate_variables()
@@ -364,8 +369,8 @@ class DynamicSim():
         self.results.sectional_lengths = self.problem.blade.radial_differences
         self.results.sectional_positions = self.problem.blade.radial_distances
         self.results.rotor_radius = self.problem.blade.R
+               
         
-                
         counter = 0
         while self.problem.t < t_max:            
             # update the time and the parameters
@@ -387,9 +392,9 @@ class DynamicSim():
 
             # update the angle of attack and lift and drag components with the new value
             # (this step is non-essential but required if interested in change in AOA,Cl,Cd)
-            for node in range(self.problem.blade.number_of_nodes):
-                self.problem.blade.update_angle_of_attack(node)
-                self.problem.blade.update_drag_and_lift(node)
+            # for node in range(self.problem.blade.number_of_nodes):
+            #     self.problem.blade.update_angle_of_attack(node)
+            #     self.problem.blade.update_drag_and_lift(node)
             
             # apply tip corrections
             if use_tip_loss:

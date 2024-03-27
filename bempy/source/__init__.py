@@ -4,4 +4,5 @@ from .correction_factors import *
 from .problem import *
 from .results import *
 from .utils import *
+from .dynamic_stall import *
 

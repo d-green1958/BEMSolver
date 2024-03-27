@@ -36,7 +36,6 @@ class Result:
         self.power_coefficient = None
         self.torque_coefficient = None
         self.thrust_coefficient = None
-        # possibility to add time varying components i.e. how axial inductance factors change with iterations and errors and other things like this
         
         
     def __str__(self) -> str:
@@ -75,30 +74,42 @@ class DynamicResult(Result):
         self.sectional_axial_inductance_factor = []
         self.sectional_tangential_inductance_factor = []
         self.sectional_phi = []
+        self.sectional_angle_of_attack = []
         
         # simulation performance
         self.sectional_convergence = []
         self.sectional_iterations = []
         self.sectional_final_error = []
         
+        # performance coefficients
         self.power_coefficient = []
         self.torque_coefficient = []
         self.thrust_coefficient = []
         
+        # lift and drag coefficients
+        self.sectional_lift_coefficient = []
+        self.sectional_drag_coefficient = []
+        
         self.time = []
         
     def add_data(self, problem):
+        """
+        function used to quickly add data from a dynamic simulation to the existing results
+
+        Args:
+            problem (UnsteadyProblem): the UnsteadyProblem class containing the results
+        """
         self.time.append(problem.t)
         
         self.wind_speed.append(problem.wind_speed)
         self.rot_speed.append(problem.rot_speed)
         
-        self.sectional_tangential_inductance_factor.append(problem.blade.tangential_inductance)
-        self.sectional_axial_inductance_factor.append(problem.blade.axial_inductance)
-        self.sectional_phi.append(problem.blade.phi)
+        self.sectional_tangential_inductance_factor.append(problem.blade.tangential_inductance.copy())
+        self.sectional_axial_inductance_factor.append(problem.blade.axial_inductance.copy())
+        self.sectional_phi.append(problem.blade.phi.copy())
         
-        self.sectional_thrust.append(problem.thrust_elements)
-        self.sectional_torque.append(problem.torque_elements)
+        self.sectional_thrust.append(problem.thrust_elements.copy())
+        self.sectional_torque.append(problem.torque_elements.copy())
         
         self.power.append(problem.power)
         self.power_coefficient.append(problem.power_coeff)
@@ -106,3 +117,7 @@ class DynamicResult(Result):
         self.thrust_coefficient.append(problem.thrust_coeff)
         self.torque.append(problem.torque)
         self.torque_coefficient.append(problem.torque_coeff)
+        
+        self.sectional_angle_of_attack.append(problem.blade.angle_of_attack.copy())
+        self.sectional_lift_coefficient.append(problem.blade.lift_coeff.copy())
+        self.sectional_drag_coefficient.append(problem.blade.drag_coeff.copy())

@@ -177,14 +177,16 @@ class problem:
         self.calculate_torque()
         (self.torque, self.thrust) = self.get_torque_and_thrust()
         self.power = self.torque * self.rot_speed
-        
-        
+
         return self.torque, self.thrust, self.power
-    
+
     def calculate_coefficients(self):
-        self.power_coeff = C_power(self.power, self.rho, self.wind_speed, self.blade.R)
-        self.thrust_coeff = C_thrust(self.thrust, self.rho, self.wind_speed, self.blade.R)
-        self.torque_coeff = C_torque(self.torque, self.rho, self.wind_speed, self.blade.R)
+        self.power_coeff = C_power(
+            self.power, self.rho, self.wind_speed, self.blade.R)
+        self.thrust_coeff = C_thrust(
+            self.thrust, self.rho, self.wind_speed, self.blade.R)
+        self.torque_coeff = C_torque(
+            self.torque, self.rho, self.wind_speed, self.blade.R)
         return self.torque_coeff, self.thrust_coeff, self.power_coeff
 
 
@@ -375,30 +377,29 @@ class UnsteadyProblem(problem):
         self.tau_1 = None
         self.tau_2 = None
         self.k = 0.6
-  
+
         self.W_prev = None
         self.W_int_prev = None
         self.W_qs_prev = None
-        
-        # parameters for Oye dynamic stall model
-        self.k_tau = 3
-        self.tau_stall = None
-        
-        self.seperation_func_prev = None
-        
 
         # parameters for original equilibrium simulation
         self.equilibrium_tol = 1E-3
         self.equilibrium_max_iter = 100
-        
-    # for dynamic stall calculations
-        
-    
+
+        # dynamic stall model class to be used to calculate the dynamic lift coeff
+        self.using_dynamic_stall = False
+        # will be intiated after loading aerofoil data.
+        self.dyn_stall_model = None
+
+    def initialise_dynamic_stall_model(self):
+        from bempy.source import DynamicStallModel
+        self.dyn_stall_model = DynamicStallModel(self.blade)
+        self.using_dynamic_stall = True
 
     def update_rot_speed(self, t):
         self.rot_speed = self.rot_speed  # for now this does nothnig to change the dynamics
 
-    def update_wind_speed(self, t, func = None):
+    def update_wind_speed(self, t, func=None):
         if func == None:
             self.wind_speed = self.wind_speed  # again will do nothing to change the dynamics
         else:
@@ -454,7 +455,6 @@ class UnsteadyProblem(problem):
             self.blade.phi[node] = atan((wind_speed - self.W_prev[node][0])
                                         / (self.blade.radial_distances[node]*self.rot_speed + self.W_prev[node][1]))
 
-
     def update_inductance_factors_from_previous_induced_vel(self):
 
         for node in range(self.blade.number_of_nodes):
@@ -462,6 +462,17 @@ class UnsteadyProblem(problem):
                 self.wind_speed
             self.blade.tangential_inductance[node] = self.W_prev[node][1] / (
                 self.rot_speed*self.blade.radial_distances[node])
+
+    def calculate_V_rel(self, element_num):
+
+        axial = self.blade.axial_inductance[element_num]
+        tangential = self.blade.tangential_inductance[element_num]
+        wind_speed = self.wind_speed
+        rot_speed = self.rot_speed
+        r = self.blade.radial_distances[element_num]
+
+        from math import sqrt
+        return sqrt((wind_speed*(1-axial))**2 + ((1+tangential)*rot_speed*r)**2)
 
     def equilibrate_variables(self):
         # here do the intial equilibrium finding that will be used for the first step of the simulation
@@ -483,8 +494,15 @@ class UnsteadyProblem(problem):
                 self.blade.phi[node] = phi_solution.root
                 self.blade.update_angle_of_attack(node)
                 self.blade.update_drag_and_lift(node)
-
+                
                 self.update_factors(node)
+
+                # apply dynamic stall
+                if self.using_dynamic_stall:
+                    alpha_value = self.blade.angle_of_attack[node]
+                    V_rel = self.calculate_V_rel(node)
+                    C_ldyn = self.dyn_stall_model.get_C_ldyn(alpha_value, node, V_rel, self.dt)
+                    self.blade.lift_coeff[node] = C_ldyn
 
                 self.converged_elements[node] = phi_solution.converged
                 self.iterations_elements[node] = phi_solution.iterations
@@ -496,7 +514,6 @@ class UnsteadyProblem(problem):
         if not self.silent_mode:
             print()
             print()
-
 
     def initialise_induced_velocities(self):
         from numpy import array, column_stack
@@ -522,11 +539,21 @@ class UnsteadyProblem(problem):
         # update angle of attack and get new drag and lift
         self.blade.update_angle_of_attack(node)
         self.blade.update_drag_and_lift(node)
+        
+        # apply dynamic stall
+        if self.using_dynamic_stall:
+            alpha_value = self.blade.angle_of_attack[node]
+            V_rel = self.calculate_V_rel(node)
+            C_ldyn = self.dyn_stall_model.get_C_ldyn(alpha_value, node, V_rel, self.dt)
+            self.blade.lift_coeff[node] = C_ldyn
+
 
         radial_distance = self.blade.radial_distances[node]
         Cl = self.blade.lift_coeff[node]
         Cd = self.blade.drag_coeff[node]
         chord_solidity = self.blade.chord_solidity[node]
+        
+        
 
         axial_inductance, tangential_inductance = self.calculate_factors(
             phi, Cl, Cd, chord_solidity)

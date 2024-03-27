@@ -6,10 +6,6 @@ from .aerofoil_lookup import AerofoilLookup
 
 
 class BladeGeometry:
-    """Class designed to store information about the blade such as the angle phi, radial distances
-    (the element position), radial differences (the element length), the angle of attack
-    and the resultant lift and drag coefficients. In addition, it contains a dict
-    for the aerofoil data linking the aerofoil name to a AerofoilLookup class. """
     def __init__(self, silent_mode = False):
         # known quantities 
         self.number_of_nodes = 0 # number of blade sections
@@ -73,7 +69,7 @@ class BladeGeometry:
                 print("Configuration read succesfully.")
         except errors.EmptyDataError:
             print("Empty file:", self.aerofoil_name)
-        except FileNotFoundError:
+        except FileNotFoundError():
             print(f"File not found:", self.aerofoil_name)
             
         # add the data from the configuration files
