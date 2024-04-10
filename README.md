@@ -2,9 +2,18 @@ Warning!: This project is very much still in development meaning the documentati
 
 # BEMSolver
 bempy, a **B**lade **E**lement **M**omentum theory **PY**thon package for rotor simulations. 
-<p align="center">
-  <img src="https://github.com/d-green1958/BEMSolver/assets/120178639/134f946d-d405-4df5-993f-9261fc4a6957" width = "100">
-</p>
+  
+```
+                                         _                                
+                                        | |                               
+                                        | |__   ___ _ __ ___  _ __  _   _ 
+                                        | '_ \ / _ \ '_ ` _ \| '_ \| | | |
+                                        | |_) |  __/ | | | | | |_) | |_| |
+                                        |_.__/ \___|_| |_| |_| .__/ \__, |
+                                                             | |     __/ |
+                                                             |_|    |___/ 
+```
+
 
 # Installation
 First clone the repository
